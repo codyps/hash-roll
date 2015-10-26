@@ -1,0 +1,6 @@
+[package]
+name = "hash-roll"
+version = "0.1.0"
+authors = ["Cody P Schafer <dev@codyps.com>"]
+description = "A selection of rolling hashes"
+keywords = [ "hash", "rolling", "incremental", "split" ]
