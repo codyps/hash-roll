@@ -1,3 +1,6 @@
+use std::mem;
+use std::ops::{Index,IndexMut};
+
 #[derive(Clone,Debug)]
 pub struct Buf<T> {
     inner: Vec<T>,
@@ -7,7 +10,7 @@ pub struct Buf<T> {
 
 impl<T> Buf<T> {
     pub fn new(limit: usize) -> Self {
-        CircBuf {
+        Buf {
             inner: Vec::with_capacity(limit),
             limit: limit,
             first: 0
@@ -27,8 +30,8 @@ impl<T> Buf<T> {
         }
     }
 
-    pub fn iter(&'a self) -> Iter<'a> {
-        Iter::new(&self)
+    pub fn iter<'a>(&'a self) -> Iter<'a, T> {
+        Iter::from(&self)
     }
 
     pub fn len(&self) -> usize {
@@ -36,15 +39,25 @@ impl<T> Buf<T> {
     }
 }
 
-impl<'a, 'b, A, B> PartialEq<&'b [B]> for Buf<A> where A: PartialEq<B> {
-    fn eq(&self, other: &'b [B]) -> bool
+impl<'a, A, B> PartialEq<[B]> for Buf<A> where A: PartialEq<B> {
+    fn eq(&self, other: &[B]) -> bool
     {
         if other.len() != self.len() {
             return false;
         }
-        
-        /* FIXME: might be more efficient to generate 2 slices and call those eq()s */
-        self.iter().zip(other.iter()).all(|(a, b)| a == b)
+
+        self.iter().eq(other.iter())
+    }
+}
+
+impl<'a, 'b, A, B> PartialEq<&'b [B]> for Buf<A> where A: PartialEq<B> {
+    fn eq(&self, other: & &'b[B]) -> bool
+    {
+        if other.len() != self.len() {
+            return false;
+        }
+
+        self.iter().eq(other.iter())
     }
 }
 
@@ -58,7 +71,6 @@ impl<T> Index<usize> for Buf<T> {
 }
 
 impl<T> IndexMut<usize> for Buf<T> {
-    type Output = T;
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         assert!(index < self.inner.len());
         &mut self.inner[(index + self.first) & self.limit]
@@ -69,20 +81,29 @@ impl<T> IndexMut<usize> for Buf<T> {
  * We could fake this with cycle().skip().take(), but that is (probably) less efficient
  */
 #[derive(Clone,Debug)]
-pub struct Iter<'a, T> {
+pub struct Iter<'a, T: 'a> {
     inner: &'a Buf<T>,
     pos: usize,
 }
 
-impl<T> Iterator for Iter<T> {
-    type Item = &T;
+impl<'a, T> Iter<'a, T> {
+    pub fn from(inner: &'a Buf<T>) -> Self {
+        Iter {
+            inner: inner,
+            pos: 0,
+        }
+    }
+}
+
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item>
     {
         let p = self.pos;
         if self.pos < self.inner.len() {
             self.pos = p + 1;
-            Some(self.inner[p])
+            Some(&self.inner[p])
         } else {
             None
         }
@@ -99,10 +120,10 @@ fn test_buf() {
     assert_eq!(b.push(4), Some(1));
 
 
-    assert_eq!(b, &[2, 3, 4]);
+    assert_eq!(b, &[2, 3, 4][..]);
 
     {
-        let i = b.iter();
+        let mut i = b.iter().cloned();
         assert_eq!(i.next(), Some(2));
         assert_eq!(i.next(), Some(3));
         assert_eq!(i.next(), Some(4));
@@ -110,6 +131,6 @@ fn test_buf() {
         assert_eq!(i.next(), None);
     }
 
-    assert_eq!(b, &[2, 3, 4]);
+    assert_eq!(b, &[2, 3, 4][..]);
 }
 
