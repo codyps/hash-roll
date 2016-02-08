@@ -37,6 +37,26 @@ impl<T> Buf<T> {
     pub fn len(&self) -> usize {
         self.inner.len()
     }
+
+    pub fn limit(&self) -> usize {
+        self.limit
+    }
+
+    pub fn as_slices(&self) -> (&[T], &[T]) {
+        let (a2, a1) = self.inner.split_at(self.first);
+        (a1, a2)
+    }
+
+    pub fn to_vec(&self) -> Vec<T>
+        where T: Clone
+    {
+        let (a1, a2) = self.as_slices();
+
+        let mut v = Vec::with_capacity(a1.len() + a2.len());
+        v.extend_from_slice(a1);
+        v.extend_from_slice(a2);
+        v
+    }
 }
 
 impl<'a, A, B> PartialEq<[B]> for Buf<A> where A: PartialEq<B> {
@@ -130,6 +150,9 @@ fn test_buf() {
         assert_eq!(i.next(), None);
         assert_eq!(i.next(), None);
     }
+
+    assert_eq!(b.as_slices(), (&[2, 3][..], &[4][..]));
+    assert_eq!(b.to_vec(), &[2, 3, 4]);
 
     assert_eq!(b, &[2, 3, 4][..]);
 }

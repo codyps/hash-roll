@@ -112,10 +112,6 @@ struct Rsyncable<A, T: Iterator<Item=A>> {
     window_len: u64,
 
     inner : T,
-
-    /* state, mut */
-    chunk_end: u64,
-    sum : u64,
 }
 
 /*
@@ -124,67 +120,63 @@ struct Rsyncable<A, T: Iterator<Item=A>> {
 struct RsyncableChunkScan {
     /* mutable state */
     sum : u64,
-    window: Vec<u8>,
-    window_start: usize,
-
-    /* parameters, from outer */
-    window_len: usize,
+    window: circ::Buf<u8>,
 }
 
 impl RsyncableChunkScan {
     pub fn new(window: usize) -> RsyncableChunkScan {
         RsyncableChunkScan {
-            window: vec![],
+            window: circ::Buf::new(window),
             sum: 0,
-            window_len: window,
-            window_start: 0,
         }
+    }
+
+    fn rsync_sum_match(&self) -> bool {
+        ((self.sum) & (self.window.len() - 1)) == 0
     }
 
     pub fn feed(&mut self, new: u8) -> Option<Vec<u8>>{
-        if (self.window.len() < self.window_len) {
-            self.sum += new;
-            return None;
+        match self.window.push(new) {
+            Some(old) => { self.sum -= old },
+            None => {}
         }
 
-        self.sum -= self.window[
+        self.sum += old;
+
+
+        if self.rsync_sum_match() {
+            Some(self.window.to_vec())
+        } else {
+            None
+        }
+    }
+
+    /// Extract the currently queued internal bytes
+    ///
+    /// Should be used when we run out of input to split
+    pub fn into_vec(self) -> Vec<u8> {
+        self.window.to_vec()
     }
 }
-    fn roll(&mut self, val: A) -> bool {
-        if (start < self.window_len) {
-            for i in range(start, self.window_len) {
-                if i == start + num {
-                    return;
-                }
-                self.sum += window[i];
-            }
-
-            num -= self.window_len - start
-        }
-
-        for i in range(start, start + num) {
-            self.sum += window[i];
-            self.sum -= window[i - self.window_len];
-
-            if self.chunk_end == -1 && rsync_sum_match(self.sum) {
-                self.chunk_end = i;
-            }
-        }
-    }
 
 impl<A, T: Intertor<Item=A>> Iterator for Rsyncable<A, T>
 {
     type Item = Vec<A>;
     fn next(&mut self) -> Option<Self::Item> {
-        let window = vec![];
+        let mut s = RsyncableChunkScan::new(self.window_len);
 
         loop {
             match self.inner.next() {
                 Some(v) => {
-                    window += 
-                }
+                    match s.feed(v) {
+                        Some(x) => {
+                            return Some(x);
+                        },
+                        None => {}
+                    }
+                },
                 None => {
-                    return Some(window);
+                    return Some(s.into_vec());
                 }
             }
         }
@@ -203,15 +195,5 @@ impl<A, T: Iterator<Item=A>> Rsyncable<A, T> {
             chunk_end: 0,
         }
     }
-
-}
-
-
-struct Stupid {
-    
-}
-
-#[test]
-fn it_works() {
 }
 */
