@@ -47,6 +47,9 @@ impl<T> Buf<T> {
         (a1, a2)
     }
 
+    //
+    // TODO: consider adding into_vec() by rotating the existing self.inner and returning it
+    //
     pub fn to_vec(&self) -> Vec<T>
         where T: Clone
     {
