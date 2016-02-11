@@ -311,7 +311,7 @@ impl Zpaq {
         let mut l = 0;
         for (i, &v) in data.iter().enumerate() {
             if s.feed(v) > self.max_hash || !self.range.contains(&i) {
-                l = i;
+                l = i + 1;
                 break;
             }
         }
@@ -324,7 +324,7 @@ impl Zpaq {
  * The rolling hash component of the zpaq splitter
  */
 struct ZpaqHash {
-    pub hash: u32,
+    pub hash: Wrapping<u32>,
     pub last_byte: u8,
     pub predicted_byte: [u8;256],
 }
@@ -333,7 +333,7 @@ impl ZpaqHash {
     #[inline]
     pub fn new() -> Self {
         ZpaqHash {
-            hash: 0,
+            hash: Wrapping(0),
             last_byte: 0,
             predicted_byte: [0;256]
         }
@@ -348,14 +348,14 @@ impl ZpaqHash {
     pub fn feed(&mut self, c: u8) -> u32
     {
         self.hash = if c == self.predicted_byte[self.last_byte as usize] {
-            (self.hash + c as u32 + 1) * 314159265
+            (self.hash + Wrapping(c as u32) + Wrapping(1)) * Wrapping(314159265)
         } else {
-            (self.hash + c as u32 + 1) * 271828182
+            (self.hash + Wrapping(c as u32) + Wrapping(1)) * Wrapping(271828182)
         };
 
         self.predicted_byte[self.last_byte as usize] = c;
         self.last_byte = c;
-        self.hash
+        self.hash.0
     }
 }
 
