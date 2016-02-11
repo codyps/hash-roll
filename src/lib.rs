@@ -128,20 +128,40 @@ pub struct Range<T> {
 }
 
 impl<T> Range<T> {
+    fn exceeds_max(&self, item: &T) -> bool
+        where T: PartialOrd<T>
+    {
+        match self.last {
+            Bound::Included(ref i) => if item > i { return true; },
+            Bound::Excluded(ref i) => if item >= i { return true; },
+            Bound::Unbounded => {}
+        }
+
+        false
+    }
+
+    fn under_min(&self, item: &T) -> bool
+        where T: PartialOrd<T>
+    {
+        match self.first {
+            Bound::Included(ref i) => if item < i { return true; },
+            Bound::Excluded(ref i) => if item <= i { return true; },
+            Bound::Unbounded => {}
+        }
+
+        false
+    }
+
     fn contains(&self, item: &T) -> bool
         where T: PartialOrd<T>
     {
         /* not excluded by first */
-        match self.first {
-            Bound::Included(ref i) => if item < i { return false; },
-            Bound::Excluded(ref i) => if item <= i { return false; },
-            Bound::Unbounded => {}
+        if self.under_min(item) {
+            return false;
         }
 
-        match self.last {
-            Bound::Included(ref i) => if item > i { return false; },
-            Bound::Excluded(ref i) => if item >= i { return false; },
-            Bound::Unbounded => {}
+        if self.exceeds_max(item) {
+            return false;
         }
 
         true
@@ -312,12 +332,24 @@ impl Zpaq {
         Self::with_average_size(6)
     }
 
+    fn average_block_size(&self) -> usize
+    {
+        /* I don't know If i really trust this, do some more confirmation */
+        1024 << self.fragment
+    }
+
+    fn split_here(&self, hash: u32, index: usize) -> bool
+    {
+        (hash > self.max_hash && !self.range.under_min(&index))
+            || self.range.exceeds_max(&index)
+    }
+
     pub fn split<'a, 'b>(&'a self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
     {
         let mut s = ZpaqHash::new();
         let mut l = 0;
         for (i, &v) in data.iter().enumerate() {
-            if s.feed(v) > self.max_hash || !self.range.contains(&i) {
+            if self.split_here(s.feed(v), i + 1) {
                 l = i + 1;
                 break;
             }
@@ -326,9 +358,39 @@ impl Zpaq {
         data.split_at(l)
     }
 
+    fn next_iter<'a, T: Iterator<Item=u8>>(&'a self, iter: T) -> Option<Vec<u8>>
+    {
+        let a = self.average_block_size();
+        /* FIXME: ideally we'd allocate enough capacity to contain a large percentage of the
+         * blocks. Just doing average probably will net us ~50% of blocks not needing additional
+         * allocation. We really need to know the PDF (and standard-deviation) to make a better
+         * prediction here. That said, even with additional data, this is a trade off with extra
+         * space consumed vs number of allocations/reallocations
+         */
+        let mut w = Vec::with_capacity(a + a / 2);
+        let mut s = ZpaqHash::new();
+        for v in iter {
+            w.push(v);
+            if self.split_here(s.feed(v), w.len()) {
+                return Some(w)
+            }
+        }
+
+        if w.is_empty() {
+            None
+        } else {
+            Some(w)
+        }
+    }
+
     pub fn slices<'a>(&'a self, data: &'a [u8]) -> ZpaqSplit<'a>
     {
         ZpaqSplit::from(self, data)
+    }
+
+    pub fn vecs<'a, T: Iterator<Item=u8>>(&'a self, data: T) -> ZpaqVecs<'a, T>
+    {
+        ZpaqVecs::from(self, data)
     }
 }
 
@@ -409,6 +471,38 @@ impl<'a> Iterator for ZpaqSplit<'a> {
         } else {
             (1, Some(self.d.len() + 1))
         }
+    }
+}
+
+pub struct ZpaqVecs<'a, T: 'a> {
+    parent: &'a Zpaq,
+    d: T,
+}
+
+impl<'a, T: 'a> ZpaqVecs<'a, T> {
+    pub fn from(i: &'a Zpaq, d: T) -> Self
+    {
+        ZpaqVecs {
+            parent: i,
+            d: d,
+        }
+    }
+}
+
+impl<'a, T: Iterator<Item=u8> + 'a> Iterator for ZpaqVecs<'a, T> {
+    type Item = Vec<u8>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.parent.next_iter(&mut self.d)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>)
+    {
+        /* At most, we'll end up returning a vec for every byte, +1 empty slice */
+        let (a, b) = self.d.size_hint();
+        (a, if let Some(c) = b { Some(c + 1) } else { None })
     }
 }
 
@@ -643,7 +737,7 @@ fn bench_zpaq (b: &mut test::Bencher) {
 
 #[cfg(feature = "nightly")]
 #[bench]
-fn bench_zpaq_iter (b: &mut test::Bencher) {
+fn bench_zpaq_iter_slice (b: &mut test::Bencher) {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     let mut d = vec![0u8; BENCH_BYTES];
@@ -651,6 +745,19 @@ fn bench_zpaq_iter (b: &mut test::Bencher) {
         rng.fill_bytes(&mut d);
         let z = Zpaq::new();
         for _ in z.slices(&d[..]) {}
+    })
+}
+
+#[cfg(feature = "nightly")]
+#[bench]
+fn bench_zpaq_iter_vec (b: &mut test::Bencher) {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let mut d = vec![0u8; BENCH_BYTES];
+    b.iter(|| {
+        rng.fill_bytes(&mut d);
+        let z = Zpaq::new();
+        for _ in z.vecs(d.iter().cloned()) {}
     })
 }
 
