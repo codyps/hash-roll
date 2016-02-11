@@ -312,7 +312,7 @@ impl Zpaq {
         Self::with_average_size(6)
     }
 
-    pub fn split_slice<'a, 'b>(&'a self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
+    pub fn split<'a, 'b>(&'a self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
     {
         let mut s = ZpaqHash::new();
         let mut l = 0;
@@ -324,6 +324,11 @@ impl Zpaq {
         }
 
         data.split_at(l)
+    }
+
+    pub fn slices<'a>(&'a self, data: &'a [u8]) -> ZpaqSplit<'a>
+    {
+        ZpaqSplit::from(self, data)
     }
 }
 
@@ -363,6 +368,47 @@ impl ZpaqHash {
         self.predicted_byte[self.last_byte as usize] = c;
         self.last_byte = c;
         self.hash.0
+    }
+}
+
+pub struct ZpaqSplit<'a> {
+    parent: &'a Zpaq,
+    d: &'a [u8],
+}
+
+impl<'a> ZpaqSplit<'a> {
+    pub fn from(i: &'a Zpaq, d : &'a [u8]) -> Self
+    {
+        ZpaqSplit {
+            parent: i,
+            d: d,
+        }
+    }
+}
+
+impl<'a> Iterator for ZpaqSplit<'a> {
+    type Item = &'a [u8];
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.d.is_empty() {
+            return None;
+        }
+
+        let (a, b) = self.parent.split(self.d);
+        self.d = b;
+        Some(a)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>)
+    {
+        /* At most, we'll end up returning a slice for every byte, +1 empty slice */
+        if self.d.is_empty() {
+            (0, Some(0))
+        } else {
+            (1, Some(self.d.len() + 1))
+        }
     }
 }
 
@@ -556,12 +602,16 @@ fn test_rsyncable() {
     assert!(shared_blocks > (c1 as u64) / 2);
 }
 
+#[cfg(all(feature = "nightly", test))]
+/* 8 MiB */
+const BENCH_BYTES : usize = 1024 * 1024 * 8;
+
 #[cfg(feature = "nightly")]
 #[bench]
 fn bench_rsyncable (b: &mut test::Bencher) {
     use rand::Rng;
     let mut rng = rand::thread_rng();
-    let mut d = vec![0u8; 4096 * 1024];
+    let mut d = vec![0u8; BENCH_BYTES];
     b.iter(|| {
         rng.fill_bytes(&mut d);
         let s = Rsyncable::from(8192, 4096, d.iter().cloned());
@@ -574,19 +624,33 @@ fn bench_rsyncable (b: &mut test::Bencher) {
 fn bench_zpaq (b: &mut test::Bencher) {
     use rand::Rng;
     let mut rng = rand::thread_rng();
-    let mut d = vec![0u8; 4096 * 1024];
+    let mut d = vec![0u8; BENCH_BYTES];
     b.iter(|| {
         rng.fill_bytes(&mut d);
         let z = Zpaq::new();
         let mut c = &d[..];
         loop {
-            let (a, b) = z.split_slice(c);
+            let (_a, b) = z.split(c);
             if b.is_empty() {
                 break;
             } else {
                 c = b;
             }
         }
+    })
+}
+
+
+#[cfg(feature = "nightly")]
+#[bench]
+fn bench_zpaq_iter (b: &mut test::Bencher) {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let mut d = vec![0u8; BENCH_BYTES];
+    b.iter(|| {
+        rng.fill_bytes(&mut d);
+        let z = Zpaq::new();
+        for _ in z.slices(&d[..]) {}
     })
 }
 
