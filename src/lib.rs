@@ -21,6 +21,7 @@
  *
  * H = s ** (k -1) (h(c_1)) ^ s**(k-2)(h(c_2)) ^ ... ^ s(h(c_(k-1))) ^ h(c_k)
  * where s(x) is a barrel shift of x (ABCDEFG becomes BCDEFGA, where each letter is a bit)
+ * s**y(x) is application of s(n) y times.
  *
  * Application:
  *
@@ -89,9 +90,6 @@ trait BlockFast<T>
  *
  * Rabin derivative
  *
- * http://encode.ru/threads/456-zpaq-updates?p=45192&viewfull=1#post45192
- * https://github.com/klauspost/dedup/blob/master/writer.go#L668
- *  'zpaqWriter'
  *
  *
  unsigned h=0;  // rolling hash for finding fragment boundaries
@@ -109,51 +107,256 @@ trait BlockFast<T>
  *
  */
 
+#[derive(Clone, Debug, Copy)]
+pub enum Bound<T> {
+    Included(T),
+    Excluded(T),
+    Unbounded,
+}
 
+#[derive(Clone, Debug, Copy)]
+pub struct Range<T> {
+    pub first: Bound<T>,
+    pub last: Bound<T>
+}
+
+impl<T> Range<T> {
+    fn contains(&self, item: &T) -> bool
+        where T: PartialOrd<T>
+    {
+        /* not excluded by first */
+        match self.first {
+            Bound::Included(ref i) => if item < i { return false; },
+            Bound::Excluded(ref i) => if item <= i { return false; },
+            Bound::Unbounded => {}
+        }
+
+        match self.last {
+            Bound::Included(ref i) => if item > i { return false; },
+            Bound::Excluded(ref i) => if item >= i { return false; },
+            Bound::Unbounded => {}
+        }
+
+        true
+    }
+}
+
+/**
+ * zpaq - a splitter used in go 'dedup' and zpaq that does not require looking back in the source
+ *        data to update
+ *
+ * PDF: ??
+ *
+ * Note: go-dedup & zpaq calculate the relationship between their parameters slightly differently.
+ * We support both of these (via the seperate with_*() constructors, but it'd be nice to clarify
+ * why they differ and what affect the differences have.
+ *
+ * References:
+ *   http://encode.ru/threads/456-zpaq-updates?p=45192&viewfull=1#post45192
+ *   https://github.com/klauspost/dedup/blob/master/writer.go#L668
+ *      'zpaqWriter'
+ *   https://github.com/zpaq/zpaq/blob/master/zpaq.cpp
+ *
+ *
+ * Parameters:
+ *  fragment (aka average_size_base_2): average size = 2**fragment KiB
+ *      in Zpaq (the compressor), this defaults to 6
+ *  min_size, max_size: additional bounds on the blocks. Not technically needed for the algorithm
+ *      to function
+ *
+ *  In Zpaq-compressor, min & max size are calculated using the fragment value
+ *  In go's dedup, fragment is calculated using a min & max size
+ *
+ * In-block state:
+ *  hash: u32, current hash
+ *  last_byte: u8, previous byte read
+ *  predicted_byte: array of 256 u8's.
+ *
+ * Between-block state:
+ *  None
+ */
 #[derive(Debug, Clone)]
 pub struct Zpaq
 {
-    max_size: usize,
-    min_size: usize,
+    /* FIXME: layout optimization? Is that even needed in rust? */
+    range: Range<usize>,
+    fragment: u8,
     max_hash: u32,
 }
 
-struct ZpaqState {
+impl Zpaq {
+    /* this is taken from go-dedup */
+    fn fragment_ave_from_max(max: usize) -> u8
+    {
+        /* TODO: convert this to pure integer math */
+        (max as f64 / (64f64 * 64f64)).log2() as u8
+    }
+
+    /* these are based on the zpaq (not go-dedup) calculations */
+    fn fragment_ave_from_range(range: &Range<usize>) -> u8
+    {
+        let v = match range.last {
+            Bound::Included(i) => i,
+            Bound::Excluded(i) => i - 1,
+            Bound::Unbounded => {
+                /* try to guess based on first */
+                64 * match range.first {
+                    Bound::Included(i) => i,
+                    Bound::Excluded(i) => i + 1,
+                    Bound::Unbounded => {
+                        /* welp, lets use the default */
+                        return 6;
+                    }
+                }
+            }
+        };
+
+        Self::fragment_ave_from_max(v)
+    }
+
+    /* these are based on the zpaq (not go-dedup) calculations */
+    fn range_from_fragment_ave(fragment_ave: u8) -> Range<usize>
+    {
+        assert!(fragment_ave <= 22);
+
+        Range {
+            first: Bound::Included(64 << fragment_ave),
+            last: Bound::Included(8128 << fragment_ave)
+        }
+    }
+
+    fn range_from_max(max: usize) -> Range<usize>
+    {
+        Range {
+            first: Bound::Included(max / 64),
+            last: Bound::Included(max)
+        }
+    }
+
+    fn max_hash_from_fragment_ave(fragment_ave: u8) -> u32
+    {
+        1 << (22 - fragment_ave)
+        /*
+         * go-dedup does this:
+         * (22f64 - fragment_ave).exp2() as u32
+         *
+         * Which should be equivalent to the integer math above (which is used by zpaq).
+         */
+    }
+
+
+    /**
+     * Create a splitter using the range of output block sizes.
+     *
+     * The average block size will be the max block size (if any) divided by 4, using the same
+     * algorithm to calculate it as go-dedup.
+     */
+    pub fn with_range(range: Range<usize>) -> Self
+    {
+        let f = Self::fragment_ave_from_range(&range);
+        Self::with_average_and_range(f, range)
+    }
+
+    /**
+     * Create a splitter using the defaults from Zpaq (the compressor) given a average size is base
+     * 2 (zpaq argument "-fragment")
+     */
+    pub fn with_average_size(average_size_base_2: u8) -> Self
+    {
+        let r = Self::range_from_fragment_ave(average_size_base_2);
+        Self::with_average_and_range(average_size_base_2, r)
+    }
+
+    /**
+     * Use the defaults from go-dedup to generate a splitter given the max size of a split.
+     *
+     * The average block size will be the max block size (if any) divided by 4, using the same
+     * algorithm to calculate it as go-dedup.
+     */
+    pub fn with_max_size(max: usize) -> Self
+    {
+        Self::with_average_and_range(
+            Self::fragment_ave_from_max(max),
+            Self::range_from_max(max)
+        )
+    }
+
+    /**
+     * Create a splitter with control of all parameters
+     *
+     * All the other constructors use this internally
+     */
+    pub fn with_average_and_range(average_size_base_2: u8, range: Range<usize>) -> Self
+    {
+        Zpaq {
+            range: range,
+            fragment: average_size_base_2,
+            max_hash: Self::max_hash_from_fragment_ave(average_size_base_2),
+        }
+    }
+
+    /**
+     * Create a splitter using the defaults from Zpaq (the compressor)
+     *
+     * Average size is 65536 bytes (64KiB), max is 520192 bytes (508KiB), min is 4096 bytes (4KiB)
+     */
+    pub fn new() -> Self
+    {
+        Self::with_average_size(6)
+    }
+
+    pub fn split_slice<'a, 'b>(&'a self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
+    {
+        let mut s = ZpaqHash::new();
+        let mut l = 0;
+        for (i, &v) in data.iter().enumerate() {
+            if s.feed(v) > self.max_hash || !self.range.contains(&i) {
+                l = i;
+                break;
+            }
+        }
+
+        data.split_at(l)
+    }
+}
+
+/**
+ * The rolling hash component of the zpaq splitter
+ */
+struct ZpaqHash {
     pub hash: u32,
     pub last_byte: u8,
     pub predicted_byte: [u8;256],
 }
 
-impl Zpaq {
-    pub fn with_max_size(max_size: usize) -> Self
-    {
-        Self::with_max_and_min_size(max_size, max_size / 4)
-    }
-
-    pub fn with_max_and_min_size(max_size: usize, min_size: usize) -> Self
-    {
-        Zpaq {
-            max_size: max_size,
-            min_size: min_size,
-            max_hash: Self::max_hash_from_max_size(max_size),
+impl ZpaqHash {
+    #[inline]
+    pub fn new() -> Self {
+        ZpaqHash {
+            hash: 0,
+            last_byte: 0,
+            predicted_byte: [0;256]
         }
     }
 
-    pub fn max_hash_from_max_size(max_size: usize) -> u32
-    {
-        /* TODO: convert this to pure integer math */
-        let fragment = (max_size as f64 / (64f64 * 64f64)).log2();
-        //1 << (22 - fragment)
-        (22f64 - fragment).exp2() as u32
-    }
-
     /*
-    pub fn split<'a, 'b, P>(&'a self, data: &'b [u8]) -> slice::SplitOn<u8, P>
+     * we can only get away with this because Zpaq doesn't need to look at old data to make it's
+     * splitting decision, it only examine's it's state + current value (and the state is
+     * relatively large, but isn't a window into past data).
+     */
+    #[inline]
+    pub fn feed(&mut self, c: u8) -> u32
     {
+        self.hash = if c == self.predicted_byte[self.last_byte as usize] {
+            (self.hash + c as u32 + 1) * 314159265
+        } else {
+            (self.hash + c as u32 + 1) * 271828182
+        };
 
-        data.split(
+        self.predicted_byte[self.last_byte as usize] = c;
+        self.last_byte = c;
+        self.hash
     }
-    */
 }
 
 /*
