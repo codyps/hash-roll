@@ -1,3 +1,10 @@
+#![cfg_attr(feature = "nightly", feature(test))]
+
+#[cfg(all(feature = "nightly", test))]
+extern crate test;
+#[cfg(all(feature = "nightly", test))]
+extern crate rand;
+
 
 /* TODO: Rabin-Karp
  * H = c_1 * a ** (k-1) + c_2 * a ** (k-2) ... + c_k * a ** 0
@@ -548,3 +555,38 @@ fn test_rsyncable() {
     println!("shared blocks: {}", shared_blocks);
     assert!(shared_blocks > (c1 as u64) / 2);
 }
+
+#[cfg(feature = "nightly")]
+#[bench]
+fn bench_rsyncable (b: &mut test::Bencher) {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let mut d = vec![0u8; 4096 * 1024];
+    b.iter(|| {
+        rng.fill_bytes(&mut d);
+        let s = Rsyncable::from(8192, 4096, d.iter().cloned());
+        for _ in s {}
+    })
+}
+
+#[cfg(feature = "nightly")]
+#[bench]
+fn bench_zpaq (b: &mut test::Bencher) {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let mut d = vec![0u8; 4096 * 1024];
+    b.iter(|| {
+        rng.fill_bytes(&mut d);
+        let z = Zpaq::new();
+        let mut c = &d[..];
+        loop {
+            let (a, b) = z.split_slice(c);
+            if b.is_empty() {
+                break;
+            } else {
+                c = b;
+            }
+        }
+    })
+}
+
