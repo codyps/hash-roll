@@ -4,6 +4,8 @@
 extern crate test;
 #[cfg(all(feature = "nightly", test))]
 extern crate rand;
+#[cfg(all(feature = "nightly", test))]
+extern crate histogram;
 
 
 /* TODO: Rabin-Karp
@@ -60,6 +62,9 @@ use std::num::Wrapping;
 pub mod circ;
 pub mod window;
 pub mod slice;
+
+#[cfg(all(feature = "nightly", test))]
+mod bench;
 
 use slice::SliceExt;
 
@@ -128,6 +133,21 @@ pub struct Range<T> {
 }
 
 impl<T> Range<T> {
+    fn new() -> Self
+    {
+        Range { first: Bound::Unbounded, last: Bound::Unbounded }
+    }
+
+    fn from_range(r: std::ops::Range<T>) -> Self
+    {
+        Range { first: Bound::Included(r.start), last: Bound::Excluded(r.end) }
+    }
+
+    fn from_inclusive(r: std::ops::Range<T>) -> Self
+    {
+        Range { first: Bound::Included(r.start), last: Bound::Included(r.end) }
+    }
+
     fn exceeds_max(&self, item: &T) -> bool
         where T: PartialOrd<T>
     {
@@ -245,19 +265,12 @@ impl Zpaq {
     fn range_from_fragment_ave(fragment_ave: u8) -> Range<usize>
     {
         assert!(fragment_ave <= 22);
-
-        Range {
-            first: Bound::Included(64 << fragment_ave),
-            last: Bound::Included(8128 << fragment_ave)
-        }
+        Range::from_inclusive(64<<fragment_ave..8128<<fragment_ave)
     }
 
     fn range_from_max(max: usize) -> Range<usize>
     {
-        Range {
-            first: Bound::Included(max / 64),
-            last: Bound::Included(max)
-        }
+        Range::from_inclusive(max/64..max)
     }
 
     fn max_hash_from_fragment_ave(fragment_ave: u8) -> u32
@@ -340,7 +353,7 @@ impl Zpaq {
 
     fn split_here(&self, hash: u32, index: usize) -> bool
     {
-        (hash > self.max_hash && !self.range.under_min(&index))
+        (hash < self.max_hash && !self.range.under_min(&index))
             || self.range.exceeds_max(&index)
     }
 
@@ -458,8 +471,14 @@ impl<'a> Iterator for ZpaqSplit<'a> {
         }
 
         let (a, b) = self.parent.split(self.d);
-        self.d = b;
-        Some(a)
+        if a.is_empty() {
+            /* FIXME: this probably means we won't emit an empty slice */
+            self.d = a;
+            Some(b)
+        } else {
+            self.d = b;
+            Some(a)
+        }
     }
 
     #[inline]
@@ -700,6 +719,8 @@ fn test_rsyncable() {
 /* 8 MiB */
 const BENCH_BYTES : usize = 1024 * 1024 * 8;
 
+const BENCH_RANGE : Range<usize> = Range { first: Bound::Unbounded, last: Bound::Unbounded };
+
 #[cfg(feature = "nightly")]
 #[bench]
 fn bench_rsyncable (b: &mut test::Bencher) {
@@ -713,6 +734,7 @@ fn bench_rsyncable (b: &mut test::Bencher) {
     })
 }
 
+
 #[cfg(feature = "nightly")]
 #[bench]
 fn bench_zpaq (b: &mut test::Bencher) {
@@ -721,11 +743,11 @@ fn bench_zpaq (b: &mut test::Bencher) {
     let mut d = vec![0u8; BENCH_BYTES];
     b.iter(|| {
         rng.fill_bytes(&mut d);
-        let z = Zpaq::new();
+        let z = Zpaq::with_range(BENCH_RANGE);
         let mut c = &d[..];
         loop {
-            let (_a, b) = z.split(c);
-            if b.is_empty() {
+            let (a, b) = z.split(c);
+            if b.is_empty() || a.is_empty() {
                 break;
             } else {
                 c = b;
@@ -743,8 +765,20 @@ fn bench_zpaq_iter_slice (b: &mut test::Bencher) {
     let mut d = vec![0u8; BENCH_BYTES];
     b.iter(|| {
         rng.fill_bytes(&mut d);
-        let z = Zpaq::new();
+        let z = Zpaq::with_range(BENCH_RANGE);
         for _ in z.slices(&d[..]) {}
+    })
+}
+
+#[cfg(feature = "nightly")]
+#[bench]
+fn bench_zpaq_iter_slice_hist (b: &mut test::Bencher) {
+    bench::split_histogram(b, BENCH_BYTES, "zpaq_iter_slice", |data| {
+        let zb = Zpaq::with_range(BENCH_RANGE);
+        let mut z = zb.slices(data);
+        Box::new(move || {
+            z.next().map(|x| x.len() as u64)
+        })
     })
 }
 
@@ -756,7 +790,7 @@ fn bench_zpaq_iter_vec (b: &mut test::Bencher) {
     let mut d = vec![0u8; BENCH_BYTES];
     b.iter(|| {
         rng.fill_bytes(&mut d);
-        let z = Zpaq::new();
+        let z = Zpaq::with_range(BENCH_RANGE);
         for _ in z.vecs(d.iter().cloned()) {}
     })
 }

@@ -12,3 +12,4 @@ nightly = []
 
 [dev-dependencies]
 rand = "*.0"
+histogram = "*.0"
