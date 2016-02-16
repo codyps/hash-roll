@@ -383,8 +383,10 @@ impl Zpaq {
         (hash < self.max_hash && !self.range.under_min(&index))
             || self.range.exceeds_max(&index)
     }
+}
 
-    pub fn split<'a, 'b>(&'a self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
+impl Splitter for Zpaq {
+    fn split<'b>(&self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
     {
         let mut s = ZpaqHash::new();
         let mut l = 0;
@@ -398,7 +400,7 @@ impl Zpaq {
         data.split_at(l)
     }
 
-    fn next_iter<'a, T: Iterator<Item=u8>>(&'a self, iter: T) -> Option<Vec<u8>>
+    fn next_iter<T: Iterator<Item=u8>>(&self, iter: T) -> Option<Vec<u8>>
     {
         let a = self.average_block_size();
         /* FIXME: ideally we'd allocate enough capacity to contain a large percentage of the
@@ -421,26 +423,6 @@ impl Zpaq {
         } else {
             Some(w)
         }
-    }
-
-    pub fn into_slices<'a>(self, data: &'a [u8]) -> ZpaqSplit<'a, Zpaq>
-    {
-        ZpaqSplit::from(self, data)
-    }
-
-    pub fn as_slices<'a>(&'a self, data: &'a [u8]) -> ZpaqSplit<'a, &Zpaq>
-    {
-        ZpaqSplit::from(self, data)
-    }
-
-    pub fn into_vecs<'a, T: Iterator<Item=u8>>(self, data: T) -> ZpaqVecs<T, Zpaq>
-    {
-        ZpaqVecs::from(self, data)
-    }
-
-    pub fn as_vecs<'a, T: Iterator<Item=u8>>(&'a self, data: T) -> ZpaqVecs<T, &Zpaq>
-    {
-        ZpaqVecs::from(self, data)
     }
 }
 
@@ -480,87 +462,6 @@ impl ZpaqHash {
         self.predicted_byte[self.last_byte as usize] = c;
         self.last_byte = c;
         self.hash.0
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ZpaqSplit<'a, T: Borrow<Zpaq> + 'a> {
-    parent: T,
-    d: &'a [u8],
-}
-
-impl<'a, T: Borrow<Zpaq> + 'a> ZpaqSplit<'a, T> {
-    pub fn from(i: T, d : &'a [u8]) -> Self
-    {
-        ZpaqSplit {
-            parent: i,
-            d: d,
-        }
-    }
-}
-
-impl<'a, T: Borrow<Zpaq> + 'a> Iterator for ZpaqSplit<'a, T> {
-    type Item = &'a [u8];
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.d.is_empty() {
-            return None;
-        }
-
-        let (a, b) = self.parent.borrow().split(self.d);
-        if a.is_empty() {
-            /* FIXME: this probably means we won't emit an empty slice */
-            self.d = a;
-            Some(b)
-        } else {
-            self.d = b;
-            Some(a)
-        }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>)
-    {
-        /* At most, we'll end up returning a slice for every byte, +1 empty slice */
-        if self.d.is_empty() {
-            (0, Some(0))
-        } else {
-            (1, Some(self.d.len() + 1))
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ZpaqVecs<T, P: Borrow<Zpaq>> {
-    parent: P,
-    d: T,
-}
-
-impl<'a, T: 'a, P: Borrow<Zpaq> + 'a> ZpaqVecs<T, P> {
-    pub fn from(i: P, d: T) -> Self
-    {
-        ZpaqVecs {
-            parent: i,
-            d: d,
-        }
-    }
-}
-
-impl<'a, T: Iterator<Item=u8> + 'a, P: Borrow<Zpaq> + 'a> Iterator for ZpaqVecs<T, P> {
-    type Item = Vec<u8>;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.parent.borrow().next_iter(&mut self.d)
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>)
-    {
-        /* At most, we'll end up returning a vec for every byte, +1 empty slice */
-        let (a, b) = self.d.size_hint();
-        (a, if let Some(c) = b { Some(c + 1) } else { None })
     }
 }
 
