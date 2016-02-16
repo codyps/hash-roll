@@ -83,7 +83,7 @@ trait Block<T> {
 }
 
 /*
-trait BlockFast<T>
+trait Splitter<T>
     where Self::SplitIter: Iterator<Item=[u8]>
 {
     /* XXX: consider using 'self' directly */
@@ -96,6 +96,12 @@ trait BlockFast<T>
     type SplitIter;
     type SplitParam;
     fn split<'a>(&self, param: SplitParam) -> SplitIter;
+    fn next_iter<>();
+
+
+    /*
+     *
+     */
 }
 */
 
@@ -414,6 +420,11 @@ impl Zpaq {
     {
         ZpaqVecs::from(self, data)
     }
+
+    pub fn as_vecs<'a, T: Iterator<Item=u8>>(&'a self, data: T) -> ZpaqVecs<T, &Zpaq>
+    {
+        ZpaqVecs::from(self, data)
+    }
 }
 
 /**
@@ -455,6 +466,7 @@ impl ZpaqHash {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ZpaqSplit<'a, T: Borrow<Zpaq> + 'a> {
     parent: T,
     d: &'a [u8],
@@ -502,6 +514,7 @@ impl<'a, T: Borrow<Zpaq> + 'a> Iterator for ZpaqSplit<'a, T> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ZpaqVecs<T, P: Borrow<Zpaq>> {
     parent: P,
     d: T,
@@ -584,99 +597,170 @@ impl<'a, T: Iterator<Item=u8> + 'a, P: Borrow<Zpaq> + 'a> Iterator for ZpaqVecs<
  *  to avoid performing the extra copies by working with an underlying slice directly.
  */
 #[derive(Clone, Debug)]
-pub struct Rsyncable<T: Iterator<Item=u8>> {
+pub struct Rsyncable {
+    /*
+     * TODO: if we can avoid loading entire files into memory, this could be u64
+     */
     window_len: usize,
     modulus: u64,
-    inner : T,
 }
 
-/*
- * Track state while searching for a single block
- */
-struct RsyncableChunkScan {
-    /* mutable state */
-    sum : Wrapping<u64>,
-    modulus: u64,
-    window: window::Buf<u8>,
-}
-
-impl RsyncableChunkScan {
-    pub fn new(window: usize, modulus: u64) -> RsyncableChunkScan {
-        RsyncableChunkScan {
-            window: window::Buf::new(window),
-            sum: Wrapping(0),
-            modulus: modulus,
-        }
+impl Rsyncable {
+    pub fn new() -> Rsyncable
+    {
+        Self::with_window_and_modulus(8192, 4096)
     }
 
-    fn rsync_sum_match(&self) -> bool {
-        //((self.sum) & (Wrapping(self.window.limit() as u64) - Wrapping(1))) == Wrapping(0)
-        (self.sum.0 % self.modulus) == 0
+    pub fn with_window_and_modulus(window: usize, modulus: u64) -> Rsyncable
+    {
+        Rsyncable { window_len: window, modulus: modulus }
     }
 
-    pub fn feed(&mut self, new: u8) -> Option<Vec<u8>>{
-        match self.window.push(new) {
-            Some(old) => { self.sum = self.sum - Wrapping(*old as u64) },
-            None => {}
-        }
+    pub fn split<'a, 'b>(&'a self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
+    {
+        let mut accum = Wrapping(0u64);
 
-        self.sum = self.sum + Wrapping(new as u64);
+        let mut l = 0;
+        for (i, &v) in data.iter().enumerate() {
+            if i >= self.window_len {
+                accum = accum - Wrapping(data[i - self.window_len] as u64);
+            }
+            accum = accum + Wrapping(v as u64);
 
-        if self.rsync_sum_match() {
-            // FIXME: ideally, this would be into_vec(), and the old self would be gone.
-            Some(self.window.to_vec())
-        } else {
-            None
-        }
-    }
-
-    /// Extract the currently queued internal bytes
-    ///
-    /// Should be used when we run out of input to split
-    pub fn into_vec(self) -> Vec<u8> {
-        self.window.into_vec()
-    }
-
-    pub fn len(&self) -> usize {
-        self.window.len()
-    }
-}
-
-impl<T: Iterator<Item=u8>> Iterator for Rsyncable<T>
-{
-    type Item = Vec<T::Item>;
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut s = RsyncableChunkScan::new(self.window_len, self.modulus);
-
-        loop {
-            match self.inner.next() {
-                Some(v) => {
-                    match s.feed(v) {
-                        Some(x) => {
-                            return Some(x);
-                        },
-                        None => {}
-                    }
-                },
-                None => {
-                    if s.len() > 0 {
-                        return Some(s.into_vec());
-                    } else {
-                        return None
-                    }
-                }
+            if (accum % Wrapping(self.modulus)).0 == 0 {
+                l = i + 1;
+                break;
             }
         }
+
+        data.split_at(l)
+    }
+
+    fn next_iter<'a, T: Iterator<Item=u8>>(&'a self, iter: T) -> Option<Vec<u8>>
+    {
+        let mut accum = Wrapping(0u64);
+
+        let a = self.window_len + self.window_len / 2;
+        let mut data = Vec::with_capacity(a);
+        for (i, v) in iter.enumerate() {
+            data.push(v);
+
+            if i >= self.window_len {
+                accum = accum - Wrapping(data[i - self.window_len] as u64);
+            }
+            accum = accum + Wrapping(v as u64);
+
+            if (accum % Wrapping(self.modulus)).0 == 0 {
+                return Some(data);
+            }
+        }
+
+        if data.is_empty() {
+            None
+        } else {
+            Some(data)
+        }
+    }
+
+    pub fn into_slices<'a>(self, data: &'a [u8]) -> RsyncableSplit<'a, Rsyncable>
+    {
+        RsyncableSplit::from(self, data)
+    }
+
+    pub fn as_slices<'a>(&'a self, data: &'a [u8]) -> RsyncableSplit<'a, &Rsyncable>
+    {
+        RsyncableSplit::from(self, data)
+    }
+
+    pub fn into_vecs<'a, T: Iterator<Item=u8>>(self, data: T) -> RsyncableVecs<T, Rsyncable>
+    {
+        RsyncableVecs::from(self, data)
+    }
+
+    pub fn as_vecs<'a, T: Iterator<Item=u8>>(&'a self, data: T) -> RsyncableVecs<T, &Rsyncable>
+    {
+        RsyncableVecs::from(self, data)
     }
 }
 
-impl<T: Iterator<Item=u8>> Rsyncable<T> {
-    pub fn from(window: usize, modulus: u64, inner: T) -> Self {
-        Rsyncable {
-            window_len: window,
-            inner: inner,
-            modulus: modulus,
+#[derive(Debug, Clone)]
+pub struct RsyncableSplit<'a, T: Borrow<Rsyncable> + 'a> {
+    parent: T,
+    d: &'a [u8],
+}
+
+impl<'a, T: Borrow<Rsyncable> + 'a> RsyncableSplit<'a, T> {
+    pub fn from(i: T, d : &'a [u8]) -> Self
+    {
+        RsyncableSplit {
+            parent: i,
+            d: d,
         }
+    }
+}
+
+impl<'a, T: Borrow<Rsyncable> + 'a> Iterator for RsyncableSplit<'a, T> {
+    type Item = &'a [u8];
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.d.is_empty() {
+            return None;
+        }
+
+        let (a, b) = self.parent.borrow().split(self.d);
+        if a.is_empty() {
+            /* FIXME: this probably means we won't emit an empty slice */
+            self.d = a;
+            Some(b)
+        } else {
+            self.d = b;
+            Some(a)
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>)
+    {
+        /* At most, we'll end up returning a slice for every byte, +1 empty slice */
+        if self.d.is_empty() {
+            (0, Some(0))
+        } else {
+            (1, Some(self.d.len() + 1))
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RsyncableVecs<T, P: Borrow<Rsyncable>> {
+    parent: P,
+    d: T,
+}
+
+impl<'a, T: 'a, P: Borrow<Rsyncable> + 'a> RsyncableVecs<T, P> {
+    pub fn from(i: P, d: T) -> Self
+    {
+        RsyncableVecs {
+            parent: i,
+            d: d,
+        }
+    }
+}
+
+impl<'a, T: Iterator<Item=u8> + 'a, P: Borrow<Rsyncable> + 'a> Iterator for RsyncableVecs<T, P> {
+    type Item = Vec<u8>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.parent.borrow().next_iter(&mut self.d)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>)
+    {
+        /* At most, we'll end up returning a vec for every byte, +1 empty slice */
+        let (a, b) = self.d.size_hint();
+        (a, if let Some(c) = b { Some(c + 1) } else { None })
     }
 }
 
@@ -688,8 +772,8 @@ fn test_rsyncable() {
     let mut d2 = d1.clone();
     d2[4] = ':' as u8;
 
-    let b1 = Rsyncable::from(4, 8, d1.iter().cloned());
-    let b2 = Rsyncable::from(4, 8, d2.iter().cloned());
+    let b1 = Rsyncable::with_window_and_modulus(4, 8).into_vecs(d1.iter().cloned());
+    let b2 = Rsyncable::with_window_and_modulus(4, 8).into_vecs(d2.iter().cloned());
 
     let c1 = b1.clone().count();
     let c2 = b2.clone().count();
@@ -733,13 +817,26 @@ const BENCH_RANGE : Range<usize> = Range { first: Bound::Unbounded, last: Bound:
 
 #[cfg(feature = "nightly")]
 #[bench]
-fn bench_rsyncable (b: &mut test::Bencher) {
+fn bench_rsyncable_vecs (b: &mut test::Bencher) {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     let mut d = vec![0u8; BENCH_BYTES];
     b.iter(|| {
         rng.fill_bytes(&mut d);
-        let s = Rsyncable::from(8192, 4096, d.iter().cloned());
+        let s = Rsyncable::new().into_vecs(d.iter().cloned());
+        for _ in s {}
+    })
+}
+
+#[cfg(feature = "nightly")]
+#[bench]
+fn bench_rsyncable_slices (b: &mut test::Bencher) {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let mut d = vec![0u8; BENCH_BYTES];
+    b.iter(|| {
+        rng.fill_bytes(&mut d);
+        let s = Rsyncable::new().into_slices(&d[..]);
         for _ in s {}
     })
 }
@@ -760,14 +857,6 @@ fn bench_zpaq (b: &mut test::Bencher) {
             }
         })
     });
-
-
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let mut d = vec![0u8; BENCH_BYTES];
-    b.iter(|| {
-        rng.fill_bytes(&mut d);
-    })
 }
 
 
