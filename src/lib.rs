@@ -69,41 +69,58 @@ mod bench;
 
 use slice::SliceExt;
 
-/**
- * Data is fed in, and blocks of data are emitted
- */
-trait Block<T> {
-    /*
-     * FIXME: allow something more general for [T]
-     * FIXME: return value should probably not be a Vec<>
-     * FIXME: can we have any errors?
-     */
-    fn feed<'a>(&mut self, input: &'a [T]) -> Option<Vec<T>>;
-    fn finish(self) -> Option<Vec<T>>;
-}
-
-/*
-trait Splitter<T>
-    where Self::SplitIter: Iterator<Item=[u8]>
+pub trait Splitter
 {
-    /* XXX: consider using 'self' directly */
-    /*
-     * last element of vector is either empty (in the case where we triggered a split on the last
-     * element) or contains elements in the case where no split was triggered.
-     *
-     * Returns an iterator
-     */
-    type SplitIter;
-    type SplitParam;
-    fn split<'a>(&self, param: SplitParam) -> SplitIter;
-    fn next_iter<>();
+    fn into_slices<'a>(self, data: &'a [u8]) -> SplitterSplit<'a, Self>
+        where Self: Sized
+    {
+        SplitterSplit::from(self, data)
+    }
+
+    fn as_slices<'a>(&'a self, data: &'a [u8]) -> SplitterSplit<'a, &Self>
+        where Self: Sized
+    {
+        SplitterSplit::from(self, data)
+    }
+
+    fn into_vecs<'a, T: Iterator<Item=u8>>(self, data: T) -> SplitterVecs<T, Self>
+        where Self: Sized
+    {
+        SplitterVecs::from(self, data)
+    }
+
+    fn as_vecs<'a, T: Iterator<Item=u8>>(&'a self, data: T) -> SplitterVecs<T, &Self>
+        where Self: Sized
+    {
+        SplitterVecs::from(self, data)
+    }
 
 
-    /*
+    /**
+     * Split data into 2 pieces using a given splitter.
      *
+     * It is expected that in most cases the second element of the return value will be split
+     * further by calling this function again.
      */
+    fn split<'b>(&self, data: &'b [u8]) -> (&'b[u8], &'b[u8]);
+
+    /**
+     * Return chunks from a given iterator, split according to the splitter used.
+     */
+    fn next_iter<T: Iterator<Item=u8>>(&self, iter: T) -> Option<Vec<u8>>;
 }
-*/
+
+impl<'a, S: Splitter + ?Sized> Splitter for &'a S {
+    fn split<'b>(&self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
+    {
+        (*self).split(data)
+    }
+
+    fn next_iter<T: Iterator<Item=u8>>(&self, iter: T) -> Option<Vec<u8>>
+    {
+        (*self).next_iter(iter)
+    }
+}
 
 /* zpaq
  *
@@ -605,18 +622,8 @@ pub struct Rsyncable {
     modulus: u64,
 }
 
-impl Rsyncable {
-    pub fn new() -> Rsyncable
-    {
-        Self::with_window_and_modulus(8192, 4096)
-    }
-
-    pub fn with_window_and_modulus(window: usize, modulus: u64) -> Rsyncable
-    {
-        Rsyncable { window_len: window, modulus: modulus }
-    }
-
-    pub fn split<'a, 'b>(&'a self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
+impl Splitter for Rsyncable {
+    fn split<'a, 'b>(&'a self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
     {
         let mut accum = Wrapping(0u64);
 
@@ -661,45 +668,37 @@ impl Rsyncable {
             Some(data)
         }
     }
+}
 
-    pub fn into_slices<'a>(self, data: &'a [u8]) -> RsyncableSplit<'a, Rsyncable>
+impl Rsyncable {
+    pub fn new() -> Rsyncable
     {
-        RsyncableSplit::from(self, data)
+        Self::with_window_and_modulus(8192, 4096)
     }
 
-    pub fn as_slices<'a>(&'a self, data: &'a [u8]) -> RsyncableSplit<'a, &Rsyncable>
+    pub fn with_window_and_modulus(window: usize, modulus: u64) -> Rsyncable
     {
-        RsyncableSplit::from(self, data)
-    }
-
-    pub fn into_vecs<'a, T: Iterator<Item=u8>>(self, data: T) -> RsyncableVecs<T, Rsyncable>
-    {
-        RsyncableVecs::from(self, data)
-    }
-
-    pub fn as_vecs<'a, T: Iterator<Item=u8>>(&'a self, data: T) -> RsyncableVecs<T, &Rsyncable>
-    {
-        RsyncableVecs::from(self, data)
+        Rsyncable { window_len: window, modulus: modulus }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct RsyncableSplit<'a, T: Borrow<Rsyncable> + 'a> {
+pub struct SplitterSplit<'a, T: Splitter + 'a> {
     parent: T,
     d: &'a [u8],
 }
 
-impl<'a, T: Borrow<Rsyncable> + 'a> RsyncableSplit<'a, T> {
+impl<'a, T: Splitter> SplitterSplit<'a, T> {
     pub fn from(i: T, d : &'a [u8]) -> Self
     {
-        RsyncableSplit {
+        SplitterSplit {
             parent: i,
             d: d,
         }
     }
 }
 
-impl<'a, T: Borrow<Rsyncable> + 'a> Iterator for RsyncableSplit<'a, T> {
+impl<'a, T: Splitter> Iterator for SplitterSplit<'a, T> {
     type Item = &'a [u8];
 
     #[inline]
@@ -732,22 +731,22 @@ impl<'a, T: Borrow<Rsyncable> + 'a> Iterator for RsyncableSplit<'a, T> {
 }
 
 #[derive(Debug, Clone)]
-pub struct RsyncableVecs<T, P: Borrow<Rsyncable>> {
+pub struct SplitterVecs<T, P: Splitter> {
     parent: P,
     d: T,
 }
 
-impl<'a, T: 'a, P: Borrow<Rsyncable> + 'a> RsyncableVecs<T, P> {
+impl<T, P: Splitter> SplitterVecs<T, P> {
     pub fn from(i: P, d: T) -> Self
     {
-        RsyncableVecs {
+        SplitterVecs {
             parent: i,
             d: d,
         }
     }
 }
 
-impl<'a, T: Iterator<Item=u8> + 'a, P: Borrow<Rsyncable> + 'a> Iterator for RsyncableVecs<T, P> {
+impl<T: Iterator<Item=u8>, P: Splitter> Iterator for SplitterVecs<T, P> {
     type Item = Vec<u8>;
 
     #[inline]
