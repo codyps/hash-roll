@@ -122,27 +122,6 @@ impl<'a, S: Splitter + ?Sized> Splitter for &'a S {
     }
 }
 
-/* zpaq
- *
- * Rabin derivative
- *
- *
- *
- unsigned h=0;  // rolling hash for finding fragment boundaries
- while (true) {
-     c=in.get();
-     if (c==o1[c1])
-         h=(h+c+1)*314159265u;
-     else
-         h=(h+c+1)*271828182u;
-     o1[c1]=c;
-     c1=c;
-     if (fragment<=22 && h<(1u<<(22-fragment)))
-         break;
- }
- *
- */
-
 #[derive(Clone, Debug, Copy)]
 pub enum Bound<T> {
     Included(T),
@@ -745,7 +724,7 @@ fn bench_rsyncable_slices (b: &mut test::Bencher) {
 #[bench]
 fn bench_zpaq (b: &mut test::Bencher) {
     bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
-        let z = Zpaq::with_range(BENCH_RANGE);
+        let z = Zpaq::new();
         let mut c = &data[..];
         Box::new(move || {
             let (a, b) = z.split(c);
@@ -764,10 +743,10 @@ fn bench_zpaq (b: &mut test::Bencher) {
 #[bench]
 fn bench_zpaq_iter_slice(b: &mut test::Bencher) {
     bench::split_histogram(b, BENCH_BYTES, "zpaq_iter_slice", |data| {
-        let zb : Zpaq = Zpaq::with_range(BENCH_RANGE);
-        let mut z = zb.into_slices(data);
+        let z = Zpaq::new();
+        let mut zi = z.into_slices(data);
         Box::new(move || {
-            z.next().map(|x| x.len() as u64)
+            zi.next().map(|x| x.len() as u64)
         })
     })
 }
@@ -776,7 +755,7 @@ fn bench_zpaq_iter_slice(b: &mut test::Bencher) {
 #[bench]
 fn bench_zpaq_iter_vec(b: &mut test::Bencher) {
     bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
-        let z = Zpaq::with_range(BENCH_RANGE);
+        let z = Zpaq::new();
         let mut zi = z.into_vecs(data.iter().cloned());
         Box::new(move || {
             zi.next().map(|x| x.len() as u64)
