@@ -35,7 +35,7 @@ pub fn split_hashmap<F, I>(b: &mut test::Bencher, bytes: usize, init: F)
 }
 */
 
-pub fn split_histogram<F>(b: &mut test::Bencher, bytes: usize, name: &'static str, init: F)
+pub fn split_histogram<F>(b: &mut test::Bencher, bytes: usize, _name: &'static str, init: F)
     where for<'a> F: Fn(&'a [u8]) -> Box<FnMut() -> Option<u64> + 'a>
 {
     use rand::Rng;
@@ -45,11 +45,11 @@ pub fn split_histogram<F>(b: &mut test::Bencher, bytes: usize, name: &'static st
     let mut lenghts = Histogram::new().unwrap();
     b.iter(|| {
         rng.fill_bytes(&mut d);
-        let mut i = init(&d[..]);
+        let mut i = test::black_box(init(&d[..]));
         loop {
-            match i() {
+            match test::black_box(i()) {
                 Some(l) => {
-                    lenghts.increment(l);
+                    lenghts.increment(l).unwrap();
                 },
                 None => {
                     break;
@@ -58,6 +58,10 @@ pub fn split_histogram<F>(b: &mut test::Bencher, bytes: usize, name: &'static st
         }
     });
 
+    /* FIXME: for some reason cargo runs this outer code many times over instead of just running
+     * the inner code many times over, causing this info to be printied far to much.
+     */
+    /*
     println!("{}({} bytes) p50: {} bytes, p90: {} bytes, p99: {} bytes, p999: {} bytes",
         name, bytes,
         lenghts.percentile(50.0).unwrap(),
@@ -65,4 +69,5 @@ pub fn split_histogram<F>(b: &mut test::Bencher, bytes: usize, name: &'static st
         lenghts.percentile(99.0).unwrap(),
         lenghts.percentile(99.9).unwrap(),
     );
+    */
 }

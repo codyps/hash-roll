@@ -58,6 +58,7 @@ extern crate histogram;
  */
 
 use std::num::Wrapping;
+use std::borrow::Borrow;
 
 pub mod circ;
 pub mod window;
@@ -133,11 +134,13 @@ pub struct Range<T> {
 }
 
 impl<T> Range<T> {
+    #[allow(dead_code)]
     fn new() -> Self
     {
         Range { first: Bound::Unbounded, last: Bound::Unbounded }
     }
 
+    #[allow(dead_code)]
     fn from_range(r: std::ops::Range<T>) -> Self
     {
         Range { first: Bound::Included(r.start), last: Bound::Excluded(r.end) }
@@ -172,6 +175,7 @@ impl<T> Range<T> {
         false
     }
 
+    #[allow(dead_code)]
     fn contains(&self, item: &T) -> bool
         where T: PartialOrd<T>
     {
@@ -396,12 +400,17 @@ impl Zpaq {
         }
     }
 
-    pub fn slices<'a>(&'a self, data: &'a [u8]) -> ZpaqSplit<'a>
+    pub fn into_slices<'a>(self, data: &'a [u8]) -> ZpaqSplit<'a, Zpaq>
     {
         ZpaqSplit::from(self, data)
     }
 
-    pub fn vecs<'a, T: Iterator<Item=u8>>(&'a self, data: T) -> ZpaqVecs<'a, T>
+    pub fn as_slices<'a>(&'a self, data: &'a [u8]) -> ZpaqSplit<'a, &Zpaq>
+    {
+        ZpaqSplit::from(self, data)
+    }
+
+    pub fn into_vecs<'a, T: Iterator<Item=u8>>(self, data: T) -> ZpaqVecs<T, Zpaq>
     {
         ZpaqVecs::from(self, data)
     }
@@ -446,13 +455,13 @@ impl ZpaqHash {
     }
 }
 
-pub struct ZpaqSplit<'a> {
-    parent: &'a Zpaq,
+pub struct ZpaqSplit<'a, T: Borrow<Zpaq> + 'a> {
+    parent: T,
     d: &'a [u8],
 }
 
-impl<'a> ZpaqSplit<'a> {
-    pub fn from(i: &'a Zpaq, d : &'a [u8]) -> Self
+impl<'a, T: Borrow<Zpaq> + 'a> ZpaqSplit<'a, T> {
+    pub fn from(i: T, d : &'a [u8]) -> Self
     {
         ZpaqSplit {
             parent: i,
@@ -461,7 +470,7 @@ impl<'a> ZpaqSplit<'a> {
     }
 }
 
-impl<'a> Iterator for ZpaqSplit<'a> {
+impl<'a, T: Borrow<Zpaq> + 'a> Iterator for ZpaqSplit<'a, T> {
     type Item = &'a [u8];
 
     #[inline]
@@ -470,7 +479,7 @@ impl<'a> Iterator for ZpaqSplit<'a> {
             return None;
         }
 
-        let (a, b) = self.parent.split(self.d);
+        let (a, b) = self.parent.borrow().split(self.d);
         if a.is_empty() {
             /* FIXME: this probably means we won't emit an empty slice */
             self.d = a;
@@ -493,13 +502,13 @@ impl<'a> Iterator for ZpaqSplit<'a> {
     }
 }
 
-pub struct ZpaqVecs<'a, T: 'a> {
-    parent: &'a Zpaq,
+pub struct ZpaqVecs<T, P: Borrow<Zpaq>> {
+    parent: P,
     d: T,
 }
 
-impl<'a, T: 'a> ZpaqVecs<'a, T> {
-    pub fn from(i: &'a Zpaq, d: T) -> Self
+impl<'a, T: 'a, P: Borrow<Zpaq> + 'a> ZpaqVecs<T, P> {
+    pub fn from(i: P, d: T) -> Self
     {
         ZpaqVecs {
             parent: i,
@@ -508,12 +517,12 @@ impl<'a, T: 'a> ZpaqVecs<'a, T> {
     }
 }
 
-impl<'a, T: Iterator<Item=u8> + 'a> Iterator for ZpaqVecs<'a, T> {
+impl<'a, T: Iterator<Item=u8> + 'a, P: Borrow<Zpaq> + 'a> Iterator for ZpaqVecs<T, P> {
     type Item = Vec<u8>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.parent.next_iter(&mut self.d)
+        self.parent.borrow().next_iter(&mut self.d)
     }
 
     #[inline]
@@ -719,6 +728,7 @@ fn test_rsyncable() {
 /* 8 MiB */
 const BENCH_BYTES : usize = 1024 * 1024 * 8;
 
+#[cfg(all(feature = "nightly", test))]
 const BENCH_RANGE : Range<usize> = Range { first: Bound::Unbounded, last: Bound::Unbounded };
 
 #[cfg(feature = "nightly")]
@@ -734,48 +744,39 @@ fn bench_rsyncable (b: &mut test::Bencher) {
     })
 }
 
-
 #[cfg(feature = "nightly")]
 #[bench]
 fn bench_zpaq (b: &mut test::Bencher) {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let mut d = vec![0u8; BENCH_BYTES];
-    b.iter(|| {
-        rng.fill_bytes(&mut d);
+    bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
         let z = Zpaq::with_range(BENCH_RANGE);
-        let mut c = &d[..];
-        loop {
+        let mut c = &data[..];
+        Box::new(move || {
             let (a, b) = z.split(c);
             if b.is_empty() || a.is_empty() {
-                break;
+                None
             } else {
                 c = b;
+                Some(b.len() as u64)
             }
-        }
-    })
-}
+        })
+    });
 
 
-#[cfg(feature = "nightly")]
-#[bench]
-fn bench_zpaq_iter_slice (b: &mut test::Bencher) {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     let mut d = vec![0u8; BENCH_BYTES];
     b.iter(|| {
         rng.fill_bytes(&mut d);
-        let z = Zpaq::with_range(BENCH_RANGE);
-        for _ in z.slices(&d[..]) {}
     })
 }
 
+
 #[cfg(feature = "nightly")]
 #[bench]
-fn bench_zpaq_iter_slice_hist (b: &mut test::Bencher) {
+fn bench_zpaq_iter_slice(b: &mut test::Bencher) {
     bench::split_histogram(b, BENCH_BYTES, "zpaq_iter_slice", |data| {
-        let zb = Zpaq::with_range(BENCH_RANGE);
-        let mut z = zb.slices(data);
+        let zb : Zpaq = Zpaq::with_range(BENCH_RANGE);
+        let mut z = zb.into_slices(data);
         Box::new(move || {
             z.next().map(|x| x.len() as u64)
         })
@@ -784,14 +785,13 @@ fn bench_zpaq_iter_slice_hist (b: &mut test::Bencher) {
 
 #[cfg(feature = "nightly")]
 #[bench]
-fn bench_zpaq_iter_vec (b: &mut test::Bencher) {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let mut d = vec![0u8; BENCH_BYTES];
-    b.iter(|| {
-        rng.fill_bytes(&mut d);
+fn bench_zpaq_iter_vec(b: &mut test::Bencher) {
+    bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
         let z = Zpaq::with_range(BENCH_RANGE);
-        for _ in z.vecs(d.iter().cloned()) {}
+        let mut zi = z.into_vecs(data.iter().cloned());
+        Box::new(move || {
+            zi.next().map(|x| x.len() as u64)
+        })
     })
 }
 
