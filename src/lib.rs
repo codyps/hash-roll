@@ -437,7 +437,7 @@ impl ZpaqHash {
 
     /*
      * we can only get away with this because Zpaq doesn't need to look at old data to make it's
-     * splitting decision, it only examine's it's state + current value (and the state is
+     * splitting decision, it only examines it's state + current value (and the state is
      * relatively large, but isn't a window into past data).
      */
     #[inline]
