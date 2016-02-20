@@ -1,9 +1,13 @@
 [package]
 name = "hash-roll"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Cody P Schafer <dev@codyps.com>"]
 description = "A selection of rolling hashes"
 keywords = [ "hash", "rolling", "incremental", "split" ]
+license = "AGPL-3.0"
+homepage = "https://github.com/jmesmon/hash-roll.git"
+repository = "https://github.com/jmesmon/hash-roll.git"
+documentation = "https://github.com/jmesmon/hash-roll/blob/master/src/lib.rs"
 
 [features]
 
@@ -11,5 +15,5 @@ keywords = [ "hash", "rolling", "incremental", "split" ]
 nightly = []
 
 [dev-dependencies]
-rand = "*.0"
-histogram = "*.0"
+rand = "0.*"
+histogram = "0.*"
