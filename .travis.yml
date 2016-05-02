@@ -12,6 +12,8 @@ rust:
   - nightly
 
 matrix:
+  exclude:
+    - rust: nightly
   include:
     - rust: nightly
       env: FEATURES=nightly
