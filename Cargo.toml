@@ -7,7 +7,7 @@ keywords = [ "hash", "rolling", "incremental", "split" ]
 license = "AGPL-3.0"
 homepage = "https://github.com/jmesmon/hash-roll.git"
 repository = "https://github.com/jmesmon/hash-roll.git"
-documentation = "https://github.com/jmesmon/hash-roll/blob/master/src/lib.rs"
+documentation = "http://codyps.com/docs/hash-roll/x86_64-unknown-linux-gnu/stable/hash_roll/index.html"
 
 [features]
 
