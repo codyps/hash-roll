@@ -5,12 +5,10 @@ authors = ["Cody P Schafer <dev@codyps.com>"]
 description = "A selection of rolling hashes"
 keywords = [ "hash", "rolling", "incremental", "split" ]
 license = "AGPL-3.0"
-homepage = "https://github.com/jmesmon/hash-roll.git"
 repository = "https://github.com/jmesmon/hash-roll.git"
-documentation = "http://codyps.com/docs/hash-roll/x86_64-unknown-linux-gnu/stable/hash_roll/index.html"
+documentation = "https://docs.rs/hash-roll"
 
 [features]
-
 # Enable things that require nightly rust (benchmarks)
 nightly = []
 
