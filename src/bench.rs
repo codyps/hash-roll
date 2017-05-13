@@ -42,7 +42,7 @@ pub fn split_histogram<F>(b: &mut test::Bencher, bytes: usize, _name: &'static s
     use histogram::*;
     let mut rng = rand::thread_rng();
     let mut d = vec![0u8; bytes];
-    let mut lenghts = Histogram::new().unwrap();
+    let mut lenghts = Histogram::new();
     b.iter(|| {
         rng.fill_bytes(&mut d);
         let mut i = test::black_box(init(&d[..]));
