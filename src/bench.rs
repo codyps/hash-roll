@@ -1,7 +1,10 @@
+extern crate rollsum;
+
 /*
  */
 use test;
 use rand;
+use super::*;
 
 
 /*
@@ -34,6 +37,27 @@ pub fn split_hashmap<F, I>(b: &mut test::Bencher, bytes: usize, init: F)
     /* TODO: analize length data */
 }
 */
+
+pub fn split<F>(b: &mut test::Bencher, bytes: usize, _name: &'static str, init: F)
+    where for<'a> F: Fn(&'a [u8]) -> Box<FnMut() -> Option<u64> + 'a>
+{
+    use rand::Rng;
+    use histogram::*;
+    let mut rng = rand::thread_rng();
+    let mut d = vec![0u8; bytes];
+    b.iter(|| {
+        rng.fill_bytes(&mut d);
+        let mut i = test::black_box(init(&d[..]));
+        loop {
+            match test::black_box(i()) {
+                _ => {},
+                None => {
+                    break;
+                }
+            }
+        }
+    });
+}
 
 pub fn split_histogram<F>(b: &mut test::Bencher, bytes: usize, _name: &'static str, init: F)
     where for<'a> F: Fn(&'a [u8]) -> Box<FnMut() -> Option<u64> + 'a>
@@ -70,4 +94,88 @@ pub fn split_histogram<F>(b: &mut test::Bencher, bytes: usize, _name: &'static s
         lenghts.percentile(99.9).unwrap(),
     );
     */
+}
+
+/* 4 MiB */
+const BENCH_BYTES : usize = 1024 * 1024 * 4;
+
+const BENCH_RANGE : Range<usize> = Range { first: Bound::Unbounded, last: Bound::Unbounded };
+
+#[bench]
+fn bench_rsyncable_vecs (b: &mut test::Bencher) {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let mut d = vec![0u8; BENCH_BYTES];
+    b.iter(|| {
+        rng.fill_bytes(&mut d);
+        let s = Rsyncable::new().into_vecs(d.iter().cloned());
+        for _ in s {}
+    })
+}
+
+#[bench]
+fn bench_rsyncable_slices (b: &mut test::Bencher) {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let mut d = vec![0u8; BENCH_BYTES];
+    b.iter(|| {
+        rng.fill_bytes(&mut d);
+        let s = Rsyncable::new().into_slices(&d[..]);
+        for _ in s {}
+    })
+}
+
+#[bench]
+fn bench_zpaq (b: &mut test::Bencher) {
+    bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
+        let z = Zpaq::new();
+        let mut c = &data[..];
+        Box::new(move || {
+            let (a, b) = z.split(c);
+            if b.is_empty() || a.is_empty() {
+                None
+            } else {
+                c = b;
+                Some(b.len() as u64)
+            }
+        })
+    });
+}
+
+#[bench]
+fn bench_zpaq_iter_slice(b: &mut test::Bencher) {
+    bench::split_histogram(b, BENCH_BYTES, "zpaq_iter_slice", |data| {
+        let z = Zpaq::new();
+        let mut zi = z.into_slices(data);
+        Box::new(move || {
+            zi.next().map(|x| x.len() as u64)
+        })
+    })
+}
+
+#[bench]
+fn bench_zpaq_iter_vec(b: &mut test::Bencher) {
+    bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
+        let z = Zpaq::new();
+        let mut zi = z.into_vecs(data.iter().cloned());
+        Box::new(move || {
+            zi.next().map(|x| x.len() as u64)
+        })
+    })
+}
+
+#[bench]
+fn bench_rollsum_bup(b: &mut test::Bencher) {
+    bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
+        let mut z = rollsum::Bup::new();
+        let mut pos = 0;
+        Box::new(move || {
+            let l = z.find_chunk_edge(&data[pos..]).map(|x| x as u64);
+            match l {
+                Some(x) => { pos += x as usize },
+                None => {},
+            }
+            l
+        })
+    })
 }

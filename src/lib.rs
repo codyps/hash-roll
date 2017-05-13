@@ -71,6 +71,10 @@ use slice::SliceExt;
 
 pub trait Splitter
 {
+    /**
+     * Create an iterator over slices from a slice and a splitter.
+     * The splitter is consumed.
+     */
     fn into_slices<'a>(self, data: &'a [u8]) -> SplitterSplit<'a, Self>
         where Self: Sized
     {
@@ -83,6 +87,10 @@ pub trait Splitter
         SplitterSplit::from(self, data)
     }
 
+    /**
+     * Create an iterator of `Vec<u8>` from an input Iterator of bytes.
+     * The splitter is consumed.
+     */
     fn into_vecs<'a, T: Iterator<Item=u8>>(self, data: T) -> SplitterVecs<T, Self>
         where Self: Sized
     {
@@ -95,6 +103,12 @@ pub trait Splitter
         SplitterVecs::from(self, data)
     }
 
+    /**
+     * Find the location (if any) to split `data` based on this splitter.
+     */
+    fn find_chunk_edge(&self, data: &[u8]) -> usize {
+        self.split(data).0.len()
+    }
 
     /**
      * Split data into 2 pieces using a given splitter.
@@ -102,7 +116,10 @@ pub trait Splitter
      * It is expected that in most cases the second element of the return value will be split
      * further by calling this function again.
      */
-    fn split<'b>(&self, data: &'b [u8]) -> (&'b[u8], &'b[u8]);
+    fn split<'b>(&self, data: &'b [u8]) -> (&'b[u8], &'b[u8]) {
+        let l = self.find_chunk_edge(data);
+        data.split_at(l)
+    }
 
     /**
      * Return chunks from a given iterator, split according to the splitter used.
@@ -365,7 +382,7 @@ impl Zpaq {
 }
 
 impl Splitter for Zpaq {
-    fn split<'b>(&self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
+    fn find_chunk_edge<'b>(&self, data: &'b [u8]) -> usize
     {
         let mut s = ZpaqHash::new();
         let mut l = 0;
@@ -376,7 +393,7 @@ impl Splitter for Zpaq {
             }
         }
 
-        data.split_at(l)
+        l
     }
 
     fn next_iter<T: Iterator<Item=u8>>(&self, iter: T) -> Option<Vec<u8>>
@@ -488,10 +505,6 @@ impl ZpaqHash {
  *
  * Trigger splits when H(n) == 0
  *
- * FIXME:
- *  Operating using iterators (like this) generally means we'll end up copying the data a number of
- *  times (not ideal). The interface may be adjusted (or an additional one provided) in the future
- *  to avoid performing the extra copies by working with an underlying slice directly.
  */
 #[derive(Clone, Debug)]
 pub struct Rsyncable {
@@ -503,7 +516,7 @@ pub struct Rsyncable {
 }
 
 impl Splitter for Rsyncable {
-    fn split<'a, 'b>(&'a self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
+    fn find_chunk_edge<'a, 'b>(&'a self, data: &'b [u8]) -> usize
     {
         let mut accum = Wrapping(0u64);
 
@@ -520,7 +533,7 @@ impl Splitter for Rsyncable {
             }
         }
 
-        data.split_at(l)
+        l
     }
 
     fn next_iter<'a, T: Iterator<Item=u8>>(&'a self, iter: T) -> Option<Vec<u8>>
@@ -559,6 +572,12 @@ impl Rsyncable {
     pub fn with_window_and_modulus(window: usize, modulus: u64) -> Rsyncable
     {
         Rsyncable { window_len: window, modulus: modulus }
+    }
+}
+
+impl Default for Rsyncable {
+    fn default() -> Self {
+        Rsyncable::new()
     }
 }
 
@@ -686,80 +705,3 @@ fn test_rsyncable() {
     println!("shared blocks: {}", shared_blocks);
     assert!(shared_blocks > (c1 as u64) / 2);
 }
-
-#[cfg(all(feature = "nightly", test))]
-/* 8 MiB */
-const BENCH_BYTES : usize = 1024 * 1024 * 8;
-
-#[cfg(all(feature = "nightly", test))]
-const BENCH_RANGE : Range<usize> = Range { first: Bound::Unbounded, last: Bound::Unbounded };
-
-#[cfg(feature = "nightly")]
-#[bench]
-fn bench_rsyncable_vecs (b: &mut test::Bencher) {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let mut d = vec![0u8; BENCH_BYTES];
-    b.iter(|| {
-        rng.fill_bytes(&mut d);
-        let s = Rsyncable::new().into_vecs(d.iter().cloned());
-        for _ in s {}
-    })
-}
-
-#[cfg(feature = "nightly")]
-#[bench]
-fn bench_rsyncable_slices (b: &mut test::Bencher) {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let mut d = vec![0u8; BENCH_BYTES];
-    b.iter(|| {
-        rng.fill_bytes(&mut d);
-        let s = Rsyncable::new().into_slices(&d[..]);
-        for _ in s {}
-    })
-}
-
-#[cfg(feature = "nightly")]
-#[bench]
-fn bench_zpaq (b: &mut test::Bencher) {
-    bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
-        let z = Zpaq::new();
-        let mut c = &data[..];
-        Box::new(move || {
-            let (a, b) = z.split(c);
-            if b.is_empty() || a.is_empty() {
-                None
-            } else {
-                c = b;
-                Some(b.len() as u64)
-            }
-        })
-    });
-}
-
-
-#[cfg(feature = "nightly")]
-#[bench]
-fn bench_zpaq_iter_slice(b: &mut test::Bencher) {
-    bench::split_histogram(b, BENCH_BYTES, "zpaq_iter_slice", |data| {
-        let z = Zpaq::new();
-        let mut zi = z.into_slices(data);
-        Box::new(move || {
-            zi.next().map(|x| x.len() as u64)
-        })
-    })
-}
-
-#[cfg(feature = "nightly")]
-#[bench]
-fn bench_zpaq_iter_vec(b: &mut test::Bencher) {
-    bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
-        let z = Zpaq::new();
-        let mut zi = z.into_vecs(data.iter().cloned());
-        Box::new(move || {
-            zi.next().map(|x| x.len() as u64)
-        })
-    })
-}
-
