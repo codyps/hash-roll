@@ -71,6 +71,7 @@ pub use rsyncable::Rsyncable;
 #[cfg(all(feature = "nightly", test))]
 mod bench;
 
+/// An object with transforms a stream of bytes into chunks, potentially by examining the bytes
 pub trait Splitter
 {
     /**
