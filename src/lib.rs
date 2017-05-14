@@ -1,4 +1,4 @@
-#![cfg_attr(feature = "nightly", feature(test))]
+#![cfg_attr(all(feature = "nightly", test), feature(test))]
 
 #[cfg(all(feature = "nightly", test))]
 extern crate test;
@@ -58,16 +58,67 @@ extern crate rollsum;
  * rollsum of librsync
  */
 
-use std::num::Wrapping;
 use std::borrow::Borrow;
 
 pub mod bup;
+pub mod zpaq;
+pub mod rsyncable;
+
+pub use bup::Bup;
+pub use zpaq::Zpaq;
+pub use rsyncable::Rsyncable;
 
 #[cfg(all(feature = "nightly", test))]
 mod bench;
 
 pub trait Splitter
 {
+    /**
+     * Find the location (if any) to split `data` based on this splitter.
+     *
+     * FIXME: discards internal state when the edge is not found, meaning a user of this API would
+     * have to re-process the entire thing.
+     *
+     * *Implimentor's Note*
+     *
+     * The provided implimentation uses [`Splitter::split`](#method.split).
+     * You must impliment either this function or `split`.
+     */
+    fn find_chunk_edge(&self, data: &[u8]) -> usize {
+        self.split(data).0.len()
+    }
+
+    /**
+     * Split data into 2 pieces using a given splitter.
+     *
+     * It is expected that in most cases the second element of the return value will be split
+     * further by calling this function again.
+     *
+     * FIXME: discards internal state when the edge is not found, meaning a user of this API would
+     * have to re-process the entire thing.
+     *
+     * *Implimentor's Note*
+     *
+     * The provided implimentation uses [`find_chunk_edge`](#method.find_chunk_edge).
+     * You must impliment either this function or `find_chunk_edge`.
+     */
+    fn split<'b>(&self, data: &'b [u8]) -> (&'b[u8], &'b[u8]) {
+        let l = self.find_chunk_edge(data);
+        data.split_at(l)
+    }
+
+    /**
+     * Return chunks from a given iterator, split according to the splitter used.
+     *
+     * See the iterator generator functions [`into_vecs`](#method.into_vecs) and
+     * [`as_vecs`](#method.as_vecs) which provide a more ergonomic interface to this.
+     *
+     * FIXME: discards internal state when the edge is not found at the end of the input iterator,
+     * meaning a user of this API would have to re-process the entire thing.
+     *
+     */
+    fn next_iter<T: Iterator<Item=u8>>(&self, iter: T) -> Option<Vec<u8>>;
+
     /**
      * Create an iterator over slices from a slice and a splitter.
      * The splitter is consumed.
@@ -99,48 +150,6 @@ pub trait Splitter
     {
         SplitterVecs::from(self, data)
     }
-
-    /**
-     * Find the location (if any) to split `data` based on this splitter.
-     *
-     * FIXME: discards internal state when the edge is not found, meaning a user of this API would
-     * have to re-process the entire thing.
-     *
-     * To implimentors:
-     *
-     * The provided implimentation uses [`Splitter::split`](trait.Splitter.html#tymethod.split).
-     * You must impliment either this function or `split`.
-     */
-    fn find_chunk_edge(&self, data: &[u8]) -> usize {
-        self.split(data).0.len()
-    }
-
-    /**
-     * Split data into 2 pieces using a given splitter.
-     *
-     * It is expected that in most cases the second element of the return value will be split
-     * further by calling this function again.
-     *
-     * FIXME: discards internal state when the edge is not found, meaning a user of this API would
-     * have to re-process the entire thing.
-     *
-     * *Implimentors Note*
-     *
-     * The provided implimentation uses [`Splitter::find_chunk_edge`](trait.Splitter.html#tymethod.find_chunk_edge).
-     * You must impliment either this function or `find_chunk_edge`.
-     */
-    fn split<'b>(&self, data: &'b [u8]) -> (&'b[u8], &'b[u8]) {
-        let l = self.find_chunk_edge(data);
-        data.split_at(l)
-    }
-
-    /**
-     * Return chunks from a given iterator, split according to the splitter used.
-     *
-     * FIXME: discards internal state when the edge is not found at the end of the input iterator,
-     * meaning a user of this API would have to re-process the entire thing.
-     */
-    fn next_iter<T: Iterator<Item=u8>>(&self, iter: T) -> Option<Vec<u8>>;
 }
 
 impl<'a, S: Splitter + ?Sized> Splitter for &'a S {
@@ -224,380 +233,6 @@ impl<T> Range<T> {
         }
 
         true
-    }
-}
-
-/**
- * A splitter used in go 'dedup' and zpaq that does not require looking back in the source
- * data to update
- *
- * PDF: ??
- *
- * Note: go-dedup & zpaq calculate the relationship between their parameters slightly differently.
- * We support both of these (via the seperate with_*() constructors, but it'd be nice to clarify
- * why they differ and what affect the differences have.
- *
- * References:
- *
- *  - http://encode.ru/threads/456-zpaq-updates?p=45192&viewfull=1#post45192
- *  - https://github.com/klauspost/dedup/blob/master/writer.go#L668, 'zpaqWriter'
- *  - https://github.com/zpaq/zpaq/blob/master/zpaq.cpp
- *
- * Parameters:
- *
- *  - fragment (aka average_size_base_2): average size = 2**fragment KiB
- *      in Zpaq (the compressor), this defaults to 6
- *  - min_size, max_size: additional bounds on the blocks. Not technically needed for the algorithm
- *      to function
- *
- *  In Zpaq-compressor, min & max size are calculated using the fragment value
- *  In go's dedup, fragment is calculated using a min & max size
- *
- * In-block state:
- *
- *  - hash: u32, current hash
- *  - last_byte: u8, previous byte read
- *  - predicted_byte: array of 256 u8's.
- *
- * Between-block state:
- *
- *  - None
- */
-#[derive(Debug, Clone)]
-pub struct Zpaq
-{
-    /* FIXME: layout optimization? Is that even needed in rust? */
-    range: Range<usize>,
-    fragment: u8,
-    max_hash: u32,
-}
-
-impl Zpaq {
-    /* this is taken from go-dedup */
-    fn fragment_ave_from_max(max: usize) -> u8
-    {
-        /* TODO: convert this to pure integer math */
-        (max as f64 / (64f64 * 64f64)).log2() as u8
-    }
-
-    /* these are based on the zpaq (not go-dedup) calculations */
-    fn fragment_ave_from_range(range: &Range<usize>) -> u8
-    {
-        let v = match range.last {
-            Bound::Included(i) => i,
-            Bound::Excluded(i) => i - 1,
-            Bound::Unbounded => {
-                /* try to guess based on first */
-                64 * match range.first {
-                    Bound::Included(i) => i,
-                    Bound::Excluded(i) => i + 1,
-                    Bound::Unbounded => {
-                        /* welp, lets use the default */
-                        return 6;
-                    }
-                }
-            }
-        };
-
-        Self::fragment_ave_from_max(v)
-    }
-
-    /* these are based on the zpaq (not go-dedup) calculations */
-    fn range_from_fragment_ave(fragment_ave: u8) -> Range<usize>
-    {
-        assert!(fragment_ave <= 22);
-        Range::from_inclusive(64<<fragment_ave..8128<<fragment_ave)
-    }
-
-    fn range_from_max(max: usize) -> Range<usize>
-    {
-        Range::from_inclusive(max/64..max)
-    }
-
-    fn max_hash_from_fragment_ave(fragment_ave: u8) -> u32
-    {
-        1 << (22 - fragment_ave)
-        /*
-         * go-dedup does this:
-         * (22f64 - fragment_ave).exp2() as u32
-         *
-         * Which should be equivalent to the integer math above (which is used by zpaq).
-         */
-    }
-
-
-    /**
-     * Create a splitter using the range of output block sizes.
-     *
-     * The average block size will be the max block size (if any) divided by 4, using the same
-     * algorithm to calculate it as go-dedup.
-     */
-    pub fn with_range(range: Range<usize>) -> Self
-    {
-        let f = Self::fragment_ave_from_range(&range);
-        Self::with_average_and_range(f, range)
-    }
-
-    /**
-     * Create a splitter using the defaults from Zpaq (the compressor) given a average size is base
-     * 2 (zpaq argument "-fragment")
-     */
-    pub fn with_average_size(average_size_base_2: u8) -> Self
-    {
-        let r = Self::range_from_fragment_ave(average_size_base_2);
-        Self::with_average_and_range(average_size_base_2, r)
-    }
-
-    /**
-     * Use the defaults from go-dedup to generate a splitter given the max size of a split.
-     *
-     * The average block size will be the max block size (if any) divided by 4, using the same
-     * algorithm to calculate it as go-dedup.
-     */
-    pub fn with_max_size(max: usize) -> Self
-    {
-        Self::with_average_and_range(
-            Self::fragment_ave_from_max(max),
-            Self::range_from_max(max)
-        )
-    }
-
-    /**
-     * Create a splitter with control of all parameters
-     *
-     * All the other constructors use this internally
-     */
-    pub fn with_average_and_range(average_size_base_2: u8, range: Range<usize>) -> Self
-    {
-        Zpaq {
-            range: range,
-            fragment: average_size_base_2,
-            max_hash: Self::max_hash_from_fragment_ave(average_size_base_2),
-        }
-    }
-
-    /**
-     * Create a splitter using the defaults from Zpaq (the compressor)
-     *
-     * Average size is 65536 bytes (64KiB), max is 520192 bytes (508KiB), min is 4096 bytes (4KiB)
-     */
-    pub fn new() -> Self
-    {
-        Self::with_average_size(6)
-    }
-
-    fn average_block_size(&self) -> usize
-    {
-        /* I don't know If i really trust this, do some more confirmation */
-        1024 << self.fragment
-    }
-
-    fn split_here(&self, hash: u32, index: usize) -> bool
-    {
-        (hash < self.max_hash && !self.range.under_min(&index))
-            || self.range.exceeds_max(&index)
-    }
-}
-
-impl Splitter for Zpaq {
-    fn find_chunk_edge<'b>(&self, data: &'b [u8]) -> usize
-    {
-        let mut s = ZpaqHash::new();
-        let mut l = 0;
-        for (i, &v) in data.iter().enumerate() {
-            if self.split_here(s.feed(v), i + 1) {
-                l = i + 1;
-                break;
-            }
-        }
-
-        l
-    }
-
-    fn next_iter<T: Iterator<Item=u8>>(&self, iter: T) -> Option<Vec<u8>>
-    {
-        let a = self.average_block_size();
-        /* FIXME: ideally we'd allocate enough capacity to contain a large percentage of the
-         * blocks. Just doing average probably will net us ~50% of blocks not needing additional
-         * allocation. We really need to know the PDF (and standard-deviation) to make a better
-         * prediction here. That said, even with additional data, this is a trade off with extra
-         * space consumed vs number of allocations/reallocations
-         */
-        let mut w = Vec::with_capacity(a + a / 2);
-        let mut s = ZpaqHash::new();
-        for v in iter {
-            w.push(v);
-            if self.split_here(s.feed(v), w.len()) {
-                return Some(w)
-            }
-        }
-
-        if w.is_empty() {
-            None
-        } else {
-            Some(w)
-        }
-    }
-}
-
-/**
- * The rolling hash component of the zpaq splitter
- */
-struct ZpaqHash {
-    pub hash: Wrapping<u32>,
-    pub last_byte: u8,
-    pub predicted_byte: [u8;256],
-}
-
-impl ZpaqHash {
-    #[inline]
-    pub fn new() -> Self {
-        ZpaqHash {
-            hash: Wrapping(0),
-            last_byte: 0,
-            predicted_byte: [0;256]
-        }
-    }
-
-    /*
-     * we can only get away with this because Zpaq doesn't need to look at old data to make it's
-     * splitting decision, it only examines it's state + current value (and the state is
-     * relatively large, but isn't a window into past data).
-     */
-    #[inline]
-    pub fn feed(&mut self, c: u8) -> u32
-    {
-        self.hash = if c == self.predicted_byte[self.last_byte as usize] {
-            (self.hash + Wrapping(c as u32) + Wrapping(1)) * Wrapping(314159265)
-        } else {
-            (self.hash + Wrapping(c as u32) + Wrapping(1)) * Wrapping(271828182)
-        };
-
-        self.predicted_byte[self.last_byte as usize] = c;
-        self.last_byte = c;
-        self.hash.0
-    }
-}
-
-/*
- * rsync
- * Efficient Algorithms for Sorting and Synchronization
- * https://www.samba.org/~tridge/phd_thesis.pdf
- */
-
-/**
- * Window-based splitter using a simple accumulator & modulus hash.
- *
- * Used by the gzip rsyncable patch (still not merged, but widely distributed) as
- * well as the rsyncrypto project to split the unerlying content into variable sized blocks prior
- * to applying a filter (compression and/or encryption) to the blocks, which the intent of allowing
- * the resulting filtered data to be more easily propogated via rsync.
- *
- * No maximum block size is provided.
- * No minimum block size is provided.
- *
- * PDF of block sizes: ???
- *
- * Note that the defacto-standard parameters allow a slightly more efficient check for a block
- * split (by replacing a modulus with a bitwise-and). This impl currently doesn't allow that
- * optimization even if you provide appropriate parameters (we need type-level integers for that).
- *
- * Parameters:
- *  window-len: The maximum number of bytes to be examined when deciding to split a block.
- *              set to 8192 by default in gzip-rsyncable & rsyncrypto)
- *  modulus:    set to half of window-len (so, 4096) in gzip-rsyncable & rsyncrypto.
- *
- * In-block state:
- *  window of window-len bytes (use of the iterator interface means we also track more bytes than
- *      this)
- *  sum (u64)
- *
- * Between-block state:
- *  none
- *
- * References:
- *  http://rsyncrypto.lingnu.com/index.php/Algorithm
- *
- *
- * S(n) = sum(c_i, var=i, top=n, bottom=n-8196)
- * A(n) = S(n) / 8192
- * H(n) = S(n) mod 4096
- *
- * Trigger splits when H(n) == 0
- *
- */
-#[derive(Clone, Debug)]
-pub struct Rsyncable {
-    /*
-     * TODO: if we can avoid loading entire files into memory, this could be u64
-     */
-    window_len: usize,
-    modulus: u64,
-}
-
-impl Splitter for Rsyncable {
-    fn find_chunk_edge<'a, 'b>(&'a self, data: &'b [u8]) -> usize
-    {
-        let mut accum = Wrapping(0u64);
-
-        let mut l = 0;
-        for (i, &v) in data.iter().enumerate() {
-            if i >= self.window_len {
-                accum = accum - Wrapping(data[i - self.window_len] as u64);
-            }
-            accum = accum + Wrapping(v as u64);
-
-            if (accum % Wrapping(self.modulus)).0 == 0 {
-                l = i + 1;
-                break;
-            }
-        }
-
-        l
-    }
-
-    fn next_iter<'a, T: Iterator<Item=u8>>(&'a self, iter: T) -> Option<Vec<u8>>
-    {
-        let mut accum = Wrapping(0u64);
-
-        let a = self.window_len + self.window_len / 2;
-        let mut data = Vec::with_capacity(a);
-        for (i, v) in iter.enumerate() {
-            data.push(v);
-
-            if i >= self.window_len {
-                accum = accum - Wrapping(data[i - self.window_len] as u64);
-            }
-            accum = accum + Wrapping(v as u64);
-
-            if (accum % Wrapping(self.modulus)).0 == 0 {
-                return Some(data);
-            }
-        }
-
-        if data.is_empty() {
-            None
-        } else {
-            Some(data)
-        }
-    }
-}
-
-impl Rsyncable {
-    pub fn new() -> Rsyncable
-    {
-        Self::with_window_and_modulus(8192, 4096)
-    }
-
-    pub fn with_window_and_modulus(window: usize, modulus: u64) -> Rsyncable
-    {
-        Rsyncable { window_len: window, modulus: modulus }
-    }
-}
-
-impl Default for Rsyncable {
-    fn default() -> Self {
-        Rsyncable::new()
     }
 }
 
