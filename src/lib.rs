@@ -3,9 +3,13 @@
 #[cfg(all(feature = "nightly", test))]
 extern crate test;
 #[cfg(all(feature = "nightly", test))]
-extern crate rand;
-#[cfg(all(feature = "nightly", test))]
 extern crate histogram;
+
+#[cfg(test)]
+extern crate rand;
+#[cfg(test)]
+extern crate rollsum;
+
 
 
 /* TODO: Rabin-Karp
@@ -63,6 +67,7 @@ use std::borrow::Borrow;
 pub mod circ;
 pub mod window;
 pub mod slice;
+pub mod bup;
 
 #[cfg(all(feature = "nightly", test))]
 mod bench;
@@ -105,6 +110,14 @@ pub trait Splitter
 
     /**
      * Find the location (if any) to split `data` based on this splitter.
+     *
+     * FIXME: discards internal state when the edge is not found, meaning a user of this API would
+     * have to re-process the entire thing.
+     *
+     * To implimentors:
+     *
+     * The provided implimentation uses [`Splitter::split`](trait.Splitter.html#tymethod.split).
+     * You must impliment either this function or `split`.
      */
     fn find_chunk_edge(&self, data: &[u8]) -> usize {
         self.split(data).0.len()
@@ -115,6 +128,14 @@ pub trait Splitter
      *
      * It is expected that in most cases the second element of the return value will be split
      * further by calling this function again.
+     *
+     * FIXME: discards internal state when the edge is not found, meaning a user of this API would
+     * have to re-process the entire thing.
+     *
+     * *Implimentors Note*
+     *
+     * The provided implimentation uses [`Splitter::find_chunk_edge`](trait.Splitter.html#tymethod.find_chunk_edge).
+     * You must impliment either this function or `find_chunk_edge`.
      */
     fn split<'b>(&self, data: &'b [u8]) -> (&'b[u8], &'b[u8]) {
         let l = self.find_chunk_edge(data);
@@ -123,6 +144,9 @@ pub trait Splitter
 
     /**
      * Return chunks from a given iterator, split according to the splitter used.
+     *
+     * FIXME: discards internal state when the edge is not found at the end of the input iterator,
+     * meaning a user of this API would have to re-process the entire thing.
      */
     fn next_iter<T: Iterator<Item=u8>>(&self, iter: T) -> Option<Vec<u8>>;
 }

@@ -1,10 +1,9 @@
-extern crate rollsum;
-
 /*
  */
 use test;
 use rand;
 use super::*;
+use super::bup::Bup;
 
 
 /*
@@ -170,12 +169,29 @@ fn bench_rollsum_bup(b: &mut test::Bencher) {
         let mut z = rollsum::Bup::new();
         let mut pos = 0;
         Box::new(move || {
-            let l = z.find_chunk_edge(&data[pos..]).map(|x| x as u64);
+            let l = z.find_chunk_edge(&data[pos..]).map(|x| (x as u64) + 1);
             match l {
                 Some(x) => { pos += x as usize },
                 None => {},
             }
             l
+        })
+    })
+}
+
+#[bench]
+fn bench_bup(b: &mut test::Bencher) {
+    bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
+        let mut z = Bup::default();
+        let mut pos = 0;
+        Box::new(move || {
+            let l = z.find_chunk_edge(&data[pos..]);
+            if l == 0 {
+                None 
+            } else {
+                pos += l;
+                Some(l as u64)
+            }
         })
     })
 }
