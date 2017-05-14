@@ -108,7 +108,7 @@ fn bench_rsyncable_vecs (b: &mut test::Bencher) {
     let mut d = vec![0u8; BENCH_BYTES];
     b.iter(|| {
         rng.fill_bytes(&mut d);
-        let s = Rsyncable::new().into_vecs(d.iter().cloned());
+        let s = Rsyncable::default().into_vecs(d.iter().cloned());
         for _ in s {}
     })
 }
@@ -120,7 +120,7 @@ fn bench_rsyncable_slices (b: &mut test::Bencher) {
     let mut d = vec![0u8; BENCH_BYTES];
     b.iter(|| {
         rng.fill_bytes(&mut d);
-        let s = Rsyncable::new().into_slices(&d[..]);
+        let s = Rsyncable::default().into_slices(&d[..]);
         for _ in s {}
     })
 }
@@ -128,7 +128,7 @@ fn bench_rsyncable_slices (b: &mut test::Bencher) {
 #[bench]
 fn bench_zpaq (b: &mut test::Bencher) {
     bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
-        let z = Zpaq::new();
+        let z = Zpaq::default();
         let mut c = &data[..];
         Box::new(move || {
             let (a, b) = z.split(c);

@@ -61,21 +61,36 @@ pub struct Rsyncable {
     modulus: u64,
 }
 
+struct HashState {
+    accum: Wrapping<u64>
+}
+
+impl Default for HashState {
+    fn default() -> Self {
+        HashState { accum: Wrapping(0) }
+    }
+}
+
+impl HashState {
+    pub fn add(&mut self, data: &[u8], base: &Rsyncable, i: usize, v: u8) -> bool {
+        if i >= base.window_len {
+            self.accum -= Wrapping(data[i - base.window_len] as u64);
+        }
+        self.accum += Wrapping(v as u64);
+        (self.accum % Wrapping(base.modulus)).0 == 0
+    }
+}
+
 impl Splitter for Rsyncable {
     fn find_chunk_edge<'a, 'b>(&'a self, data: &'b [u8]) -> usize
     {
-        let mut accum = Wrapping(0u64);
+        let mut hs = HashState::default();
 
         let mut l = 0;
         for (i, &v) in data.iter().enumerate() {
-            if i >= self.window_len {
-                accum = accum - Wrapping(data[i - self.window_len] as u64);
-            }
-            accum = accum + Wrapping(v as u64);
-
-            if (accum % Wrapping(self.modulus)).0 == 0 {
+            if hs.add(data, self, i, v) {
                 l = i + 1;
-                break;
+                break
             }
         }
 
@@ -84,20 +99,15 @@ impl Splitter for Rsyncable {
 
     fn next_iter<'a, T: Iterator<Item=u8>>(&'a self, iter: T) -> Option<Vec<u8>>
     {
-        let mut accum = Wrapping(0u64);
+        let mut hs = HashState::default();
 
         let a = self.window_len + self.window_len / 2;
         let mut data = Vec::with_capacity(a);
         for (i, v) in iter.enumerate() {
             data.push(v);
 
-            if i >= self.window_len {
-                accum = accum - Wrapping(data[i - self.window_len] as u64);
-            }
-            accum = accum + Wrapping(v as u64);
-
-            if (accum % Wrapping(self.modulus)).0 == 0 {
-                return Some(data);
+            if hs.add(&data, self, i, v) {
+                return Some(data)
             }
         }
 
