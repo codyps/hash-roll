@@ -37,11 +37,11 @@ pub fn split_hashmap<F, I>(b: &mut test::Bencher, bytes: usize, init: F)
 }
 */
 
+/*
 pub fn split<F>(b: &mut test::Bencher, bytes: usize, _name: &'static str, init: F)
     where for<'a> F: Fn(&'a [u8]) -> Box<FnMut() -> Option<u64> + 'a>
 {
     use rand::Rng;
-    use histogram::*;
     let mut rng = rand::thread_rng();
     let mut d = vec![0u8; bytes];
     b.iter(|| {
@@ -49,14 +49,15 @@ pub fn split<F>(b: &mut test::Bencher, bytes: usize, _name: &'static str, init: 
         let mut i = test::black_box(init(&d[..]));
         loop {
             match test::black_box(i()) {
-                _ => {},
                 None => {
                     break;
-                }
+                },
+                _ => {},
             }
         }
     });
 }
+*/
 
 pub fn split_histogram<F>(b: &mut test::Bencher, bytes: usize, _name: &'static str, init: F)
     where for<'a> F: Fn(&'a [u8]) -> Box<FnMut() -> Option<u64> + 'a>
@@ -98,7 +99,7 @@ pub fn split_histogram<F>(b: &mut test::Bencher, bytes: usize, _name: &'static s
 /* 4 MiB */
 const BENCH_BYTES : usize = 1024 * 1024 * 4;
 
-const BENCH_RANGE : Range<usize> = Range { first: Bound::Unbounded, last: Bound::Unbounded };
+//const BENCH_RANGE : Range<usize> = Range { first: Bound::Unbounded, last: Bound::Unbounded };
 
 #[bench]
 fn bench_rsyncable_vecs (b: &mut test::Bencher) {
@@ -182,7 +183,7 @@ fn bench_rollsum_bup(b: &mut test::Bencher) {
 #[bench]
 fn bench_bup(b: &mut test::Bencher) {
     bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
-        let mut z = Bup::default();
+        let z = Bup::default();
         let mut pos = 0;
         Box::new(move || {
             let l = z.find_chunk_edge(&data[pos..]);

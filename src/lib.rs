@@ -55,24 +55,16 @@ extern crate rollsum;
  */
 
 /* TODO:
- *
- * bupsplit, part of bup's "hashsplit" library
  * rollsum of librsync
- *
  */
 
 use std::num::Wrapping;
 use std::borrow::Borrow;
 
-pub mod circ;
-pub mod window;
-pub mod slice;
 pub mod bup;
 
 #[cfg(all(feature = "nightly", test))]
 mod bench;
-
-use slice::SliceExt;
 
 pub trait Splitter
 {
@@ -236,8 +228,8 @@ impl<T> Range<T> {
 }
 
 /**
- * zpaq - a splitter used in go 'dedup' and zpaq that does not require looking back in the source
- *        data to update
+ * A splitter used in go 'dedup' and zpaq that does not require looking back in the source
+ * data to update
  *
  * PDF: ??
  *
@@ -246,28 +238,30 @@ impl<T> Range<T> {
  * why they differ and what affect the differences have.
  *
  * References:
- *   http://encode.ru/threads/456-zpaq-updates?p=45192&viewfull=1#post45192
- *   https://github.com/klauspost/dedup/blob/master/writer.go#L668
- *      'zpaqWriter'
- *   https://github.com/zpaq/zpaq/blob/master/zpaq.cpp
  *
+ *  - http://encode.ru/threads/456-zpaq-updates?p=45192&viewfull=1#post45192
+ *  - https://github.com/klauspost/dedup/blob/master/writer.go#L668, 'zpaqWriter'
+ *  - https://github.com/zpaq/zpaq/blob/master/zpaq.cpp
  *
  * Parameters:
- *  fragment (aka average_size_base_2): average size = 2**fragment KiB
+ *
+ *  - fragment (aka average_size_base_2): average size = 2**fragment KiB
  *      in Zpaq (the compressor), this defaults to 6
- *  min_size, max_size: additional bounds on the blocks. Not technically needed for the algorithm
+ *  - min_size, max_size: additional bounds on the blocks. Not technically needed for the algorithm
  *      to function
  *
  *  In Zpaq-compressor, min & max size are calculated using the fragment value
  *  In go's dedup, fragment is calculated using a min & max size
  *
  * In-block state:
- *  hash: u32, current hash
- *  last_byte: u8, previous byte read
- *  predicted_byte: array of 256 u8's.
+ *
+ *  - hash: u32, current hash
+ *  - last_byte: u8, previous byte read
+ *  - predicted_byte: array of 256 u8's.
  *
  * Between-block state:
- *  None
+ *
+ *  - None
  */
 #[derive(Debug, Clone)]
 pub struct Zpaq
@@ -492,7 +486,9 @@ impl ZpaqHash {
  */
 
 /**
- * 'Rsyncable' is used by the gzip rsyncable patch (still not merged, but widely distributed) as
+ * Window-based splitter using a simple accumulator & modulus hash.
+ *
+ * Used by the gzip rsyncable patch (still not merged, but widely distributed) as
  * well as the rsyncrypto project to split the unerlying content into variable sized blocks prior
  * to applying a filter (compression and/or encryption) to the blocks, which the intent of allowing
  * the resulting filtered data to be more easily propogated via rsync.
