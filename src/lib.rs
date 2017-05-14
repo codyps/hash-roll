@@ -123,16 +123,16 @@ pub trait Splitter
      * Create an iterator over slices from a slice and a splitter.
      * The splitter is consumed.
      */
-    fn into_slices<'a>(self, data: &'a [u8]) -> SplitterSplit<'a, Self>
+    fn into_slices<'a>(self, data: &'a [u8]) -> SplitterSlices<'a, Self>
         where Self: Sized
     {
-        SplitterSplit::from(self, data)
+        SplitterSlices::from(self, data)
     }
 
-    fn as_slices<'a>(&'a self, data: &'a [u8]) -> SplitterSplit<'a, &Self>
+    fn as_slices<'a>(&'a self, data: &'a [u8]) -> SplitterSlices<'a, &Self>
         where Self: Sized
     {
-        SplitterSplit::from(self, data)
+        SplitterSlices::from(self, data)
     }
 
     /**
@@ -236,23 +236,24 @@ impl<T> Range<T> {
     }
 }
 
+/// Iterator over slices emitted from a splitter
 #[derive(Debug, Clone)]
-pub struct SplitterSplit<'a, T: Splitter + 'a> {
+pub struct SplitterSlices<'a, T: Splitter + 'a> {
     parent: T,
     d: &'a [u8],
 }
 
-impl<'a, T: Splitter> SplitterSplit<'a, T> {
+impl<'a, T: Splitter> SplitterSlices<'a, T> {
     pub fn from(i: T, d : &'a [u8]) -> Self
     {
-        SplitterSplit {
+        SplitterSlices {
             parent: i,
             d: d,
         }
     }
 }
 
-impl<'a, T: Splitter> Iterator for SplitterSplit<'a, T> {
+impl<'a, T: Splitter> Iterator for SplitterSlices<'a, T> {
     type Item = &'a [u8];
 
     #[inline]
@@ -284,6 +285,7 @@ impl<'a, T: Splitter> Iterator for SplitterSplit<'a, T> {
     }
 }
 
+/// Iterator over vecs emitted from a splitter
 #[derive(Debug, Clone)]
 pub struct SplitterVecs<T, P: Splitter> {
     parent: P,
