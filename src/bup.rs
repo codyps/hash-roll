@@ -25,6 +25,8 @@ pub struct RollSum {
     wofs: Wrapping<usize>,
 }
 
+// TODO: impl Debug, Clone, PartialEq, Eq for RollSum. derive blocked by [u8;WINDOW_SIZE].
+
 impl RollSum {
     pub fn digest(&self) -> u32 {
         (self.s1.0 << 16) | (self.s2.0 & 0xffff)
@@ -73,6 +75,7 @@ impl Default for RollSum {
     }
 }
 
+#[derive(Clone,Debug)]
 pub struct Bup {
     _x: PhantomData<()>
 }
