@@ -145,7 +145,7 @@ fn bench_zpaq (b: &mut test::Bencher) {
 #[bench]
 fn bench_zpaq_iter_slice(b: &mut test::Bencher) {
     bench::split_histogram(b, BENCH_BYTES, "zpaq_iter_slice", |data| {
-        let z = Zpaq::new();
+        let z = Zpaq::default();
         let mut zi = z.into_slices(data);
         Box::new(move || {
             zi.next().map(|x| x.len() as u64)
@@ -156,7 +156,7 @@ fn bench_zpaq_iter_slice(b: &mut test::Bencher) {
 #[bench]
 fn bench_zpaq_iter_vec(b: &mut test::Bencher) {
     bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
-        let z = Zpaq::new();
+        let z = Zpaq::default();
         let mut zi = z.into_vecs(data.iter().cloned());
         Box::new(move || {
             zi.next().map(|x| x.len() as u64)
@@ -167,7 +167,7 @@ fn bench_zpaq_iter_vec(b: &mut test::Bencher) {
 #[bench]
 fn bench_rollsum_bup(b: &mut test::Bencher) {
     bench::split_histogram(b, BENCH_BYTES, module_path!(), |data| {
-        let mut z = rollsum::Bup::new();
+        let mut z = rollsum::Bup::default();
         let mut pos = 0;
         Box::new(move || {
             let l = z.find_chunk_edge(&data[pos..]).map(|x| (x as u64) + 1);

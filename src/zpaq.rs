@@ -150,16 +150,6 @@ impl Zpaq {
         }
     }
 
-    /**
-     * Create a splitter using the defaults from Zpaq (the compressor)
-     *
-     * Average size is 65536 bytes (64KiB), max is 520192 bytes (508KiB), min is 4096 bytes (4KiB)
-     */
-    pub fn new() -> Self
-    {
-        Self::default()
-    }
-
     fn average_block_size(&self) -> usize
     {
         /* I don't know If i really trust this, do some more confirmation */
@@ -174,6 +164,11 @@ impl Zpaq {
 }
 
 impl Default for Zpaq {
+    /**
+     * Create a splitter using the defaults from Zpaq (the compressor)
+     *
+     * Average size is 65536 bytes (64KiB), max is 520192 bytes (508KiB), min is 4096 bytes (4KiB)
+     */
     fn default() -> Self {
         Self::with_average_size(6)
     }
@@ -182,7 +177,7 @@ impl Default for Zpaq {
 impl Splitter for Zpaq {
     fn find_chunk_edge<'b>(&self, data: &'b [u8]) -> usize
     {
-        let mut s = ZpaqHash::new();
+        let mut s = ZpaqHash::default();
         let mut l = 0;
         for (i, &v) in data.iter().enumerate() {
             if self.split_here(s.feed(v), i + 1) {
@@ -204,7 +199,7 @@ impl Splitter for Zpaq {
          * space consumed vs number of allocations/reallocations
          */
         let mut w = Vec::with_capacity(a + a / 2);
-        let mut s = ZpaqHash::new();
+        let mut s = ZpaqHash::default();
         for v in iter {
             w.push(v);
             if self.split_here(s.feed(v), w.len()) {
@@ -229,22 +224,22 @@ pub struct ZpaqHash {
     predicted_byte: [u8;256],
 }
 
-impl ZpaqHash {
-    #[inline]
-    pub fn new() -> Self {
+impl Default for ZpaqHash {
+    fn default() -> Self {
         ZpaqHash {
             hash: Wrapping(0),
             last_byte: 0,
             predicted_byte: [0;256]
         }
     }
+}
 
+impl ZpaqHash {
     /*
      * we can only get away with this because Zpaq doesn't need to look at old data to make it's
      * splitting decision, it only examines it's state + current value (and the state is
      * relatively large, but isn't a window into past data).
      */
-    #[inline]
     pub fn feed(&mut self, c: u8) -> u32
     {
         self.hash = if c == self.predicted_byte[self.last_byte as usize] {
