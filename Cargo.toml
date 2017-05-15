@@ -16,3 +16,4 @@ nightly = []
 rand = "0.*"
 histogram = "0.*"
 rollsum = "0.*"
+quickcheck = "0.*"

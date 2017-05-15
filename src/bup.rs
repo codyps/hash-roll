@@ -90,7 +90,7 @@ impl Splitter for Bup {
         for (i, &v) in data.iter().enumerate() {
             r.roll_byte(v);
             if r.at_split() {
-                return i;
+                return i+1;
             }
         }
 
@@ -201,7 +201,7 @@ mod test {
         r.fill_bytes(&mut b);
 
         let v1 = m1.find_chunk_edge(&b);
-        let v2 = m2.find_chunk_edge(&b).map(|x| x+1).unwrap_or(0);
+        let v2 = m2.find_chunk_edge(&b).unwrap_or(0);
 
 
         assert_eq!(v1, v2);
