@@ -167,41 +167,41 @@ impl<'a, S: Splitter + ?Sized> Splitter for &'a S {
     }
 }
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
 pub enum Bound<T> {
     Included(T),
     Excluded(T),
     Unbounded,
 }
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
 pub struct Range<T> {
-    pub first: Bound<T>,
-    pub last: Bound<T>
+    pub lower: Bound<T>,
+    pub upper: Bound<T>
 }
 
 impl<T> Range<T> {
     #[allow(dead_code)]
     fn new() -> Self
     {
-        Range { first: Bound::Unbounded, last: Bound::Unbounded }
+        Range { lower: Bound::Unbounded, upper: Bound::Unbounded }
     }
 
     #[allow(dead_code)]
     fn from_range(r: std::ops::Range<T>) -> Self
     {
-        Range { first: Bound::Included(r.start), last: Bound::Excluded(r.end) }
+        Range { lower: Bound::Included(r.start), upper: Bound::Excluded(r.end) }
     }
 
     fn from_inclusive(r: std::ops::Range<T>) -> Self
     {
-        Range { first: Bound::Included(r.start), last: Bound::Included(r.end) }
+        Range { lower: Bound::Included(r.start), upper: Bound::Included(r.end) }
     }
 
     fn exceeds_max(&self, item: &T) -> bool
         where T: PartialOrd<T>
     {
-        match self.last {
+        match self.upper {
             Bound::Included(ref i) => if item > i { return true; },
             Bound::Excluded(ref i) => if item >= i { return true; },
             Bound::Unbounded => {}
@@ -213,7 +213,7 @@ impl<T> Range<T> {
     fn under_min(&self, item: &T) -> bool
         where T: PartialOrd<T>
     {
-        match self.first {
+        match self.lower {
             Bound::Included(ref i) => if item < i { return true; },
             Bound::Excluded(ref i) => if item <= i { return true; },
             Bound::Unbounded => {}
@@ -226,7 +226,7 @@ impl<T> Range<T> {
     fn contains(&self, item: &T) -> bool
         where T: PartialOrd<T>
     {
-        /* not excluded by first */
+        /* not excluded by lower */
         if self.under_min(item) {
             return false;
         }

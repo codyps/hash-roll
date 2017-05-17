@@ -37,7 +37,7 @@ use super::{Splitter,Range,Bound};
  *
  *  - None
  */
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Zpaq
 {
     /* FIXME: layout optimization? Is that even needed in rust? */
@@ -57,12 +57,12 @@ impl Zpaq {
     /* these are based on the zpaq (not go-dedup) calculations */
     fn fragment_ave_from_range(range: &Range<usize>) -> u8
     {
-        let v = match range.last {
+        let v = match range.upper {
             Bound::Included(i) => i,
             Bound::Excluded(i) => i - 1,
             Bound::Unbounded => {
                 /* try to guess based on first */
-                64 * match range.first {
+                64 * match range.lower {
                     Bound::Included(i) => i,
                     Bound::Excluded(i) => i + 1,
                     Bound::Unbounded => {

@@ -52,7 +52,7 @@ use super::{Splitter};
  * Trigger splits when H(n) == 0
  *
  */
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Rsyncable {
     /*
      * TODO: if we can avoid loading entire files into memory, this could be u64
