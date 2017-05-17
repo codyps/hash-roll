@@ -10,6 +10,8 @@ extern crate rand;
 #[cfg(test)]
 extern crate rollsum;
 
+extern crate fmt_extra;
+
 
 
 /* TODO: Rabin-Karp

@@ -13,6 +13,9 @@ include = ["Cargo.toml", "**/*.rs", "README.md"]
 # Enable things that require nightly rust (benchmarks)
 nightly = []
 
+[dependencies]
+fmt-extra = "0.1"
+
 [dev-dependencies]
 rand = "0.*"
 histogram = "0.*"

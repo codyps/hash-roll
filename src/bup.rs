@@ -16,6 +16,9 @@ const ROLLSUM_CHAR_OFFSET: usize = 31;
  * A new instance is used for each block splitting. In other words: after finding the first edge, a
  * new `RollSum` is instantiated to find the next edge.
  */
+// Note: the [u8;WINDOW_SIZE] blocks most derives (Clone, Debug, PartialEq, Eq) due to the lack of
+// impls for [u8;WINDOW_SIZE]. Explore the potential for using a custom derive plugin/macro to
+// generate these impls more easily.
 pub struct RollSum {
     s1: Wrapping<u32>,
     s2: Wrapping<u32>,
@@ -25,7 +28,44 @@ pub struct RollSum {
     wofs: Wrapping<usize>,
 }
 
-// TODO: impl Debug, Clone, PartialEq, Eq for RollSum. derive blocked by [u8;WINDOW_SIZE].
+impl ::std::fmt::Debug for RollSum {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error>
+    {
+        f.debug_struct("RollSum")
+            .field("s1", &self.s1)
+            .field("s2", &self.s2)
+            .field("window", &::fmt_extra::Hs(&self.window[..]))
+            .field("wofs", &self.wofs)
+            .finish()
+    }
+}
+
+impl Clone for RollSum {
+    fn clone(&self) -> Self {
+        RollSum {
+            ..*self
+        }
+    }
+}
+
+impl PartialEq for RollSum {
+    fn eq(&self, other: &Self) -> bool {
+        self.s1 == other.s1 &&
+            self.s2 == other.s2 &&
+            self.wofs == other.wofs &&
+            {
+                for i in 0..WINDOW_SIZE {
+                    if self.window[i] != other.window[i] {
+                        return false;
+                    }
+                }
+
+                true
+            }
+    }
+}
+
+impl Eq for RollSum {}
 
 impl RollSum {
     pub fn digest(&self) -> u32 {
