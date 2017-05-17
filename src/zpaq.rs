@@ -224,6 +224,38 @@ pub struct ZpaqHash {
     predicted_byte: [u8;256],
 }
 
+impl Clone for ZpaqHash {
+    fn clone(&self) -> Self {
+        ZpaqHash { ..*self }
+    }
+}
+
+impl PartialEq for ZpaqHash {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash == other.hash &&
+            self.last_byte == other.last_byte && {
+                for i in 0..256 {
+                    if self.predicted_byte[i] != other.predicted_byte[i] {
+                        return false;
+                    }
+                }
+                true
+            }
+    }
+}
+
+impl Eq for ZpaqHash {}
+
+impl ::std::fmt::Debug for ZpaqHash {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+        f.debug_struct("ZpaqHash")
+            .field("hash", &self.hash)
+            .field("last_byte", &self.last_byte)
+            .field("predicted_byte", &::fmt_extra::Hs(&self.predicted_byte[..]))
+            .finish()
+    }
+}
+
 impl Default for ZpaqHash {
     fn default() -> Self {
         ZpaqHash {

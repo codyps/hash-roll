@@ -240,7 +240,7 @@ impl<T> Range<T> {
 }
 
 /// Iterator over slices emitted from a splitter
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SplitterSlices<'a, T: Splitter + 'a> {
     parent: T,
     d: &'a [u8],
@@ -289,7 +289,7 @@ impl<'a, T: Splitter> Iterator for SplitterSlices<'a, T> {
 }
 
 /// Iterator over vecs emitted from a splitter
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SplitterVecs<T, P: Splitter> {
     parent: P,
     d: T,

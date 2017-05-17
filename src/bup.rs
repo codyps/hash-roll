@@ -115,7 +115,7 @@ impl Default for RollSum {
     }
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug, Eq, PartialEq)]
 pub struct Bup {
     _x: PhantomData<()>
 }
