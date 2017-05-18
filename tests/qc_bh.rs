@@ -1,6 +1,8 @@
+/*
 extern crate hash_roll;
 #[macro_use]
 extern crate quickcheck;
+*/
 
 /*
 #[derive(Debug,Clone,PartialEq,Eq)]
@@ -48,6 +50,7 @@ impl quickcheck::Arbitrary for Fma {
 }
 */
 
+/*
 quickcheck! {
     // choose a substring of `data` and use buzhash to find it
     fn find_match(data: Vec<u8>, size: usize, offs: usize)  -> bool {
@@ -84,6 +87,23 @@ quickcheck! {
         b.push(ms);
         let h = b.hash();
 
-        b2.find_match(h, &data[..]) == offs + size
+        let mut d = &data[..];
+        loop {
+            let f = b2.find_match(h, &d[..]);
+            if f == 0 {
+                return false
+            }
+
+            if f >= offs + size {
+                return false;
+            }
+            
+            if f > size && (&data[(f-size)..f] == ms) {
+                return true;
+            }
+
+            d = &d[f..];
+        }
     }
 }
+*/
