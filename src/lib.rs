@@ -12,8 +12,6 @@ extern crate rollsum;
 
 extern crate fmt_extra;
 
-
-
 /* TODO: Rabin-Karp
  * H = c_1 * a ** (k-1) + c_2 * a ** (k-2) ... + c_k * a ** 0
  * where:
