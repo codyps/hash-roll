@@ -25,7 +25,7 @@ pub struct RollSum {
 
     /// window offset
     wofs: Wrapping<usize>,
-    window: [u8; WINDOW_SIZE],
+    window: Box<[u8]>,
 }
 
 impl ::std::fmt::Debug for RollSum {
@@ -43,6 +43,7 @@ impl ::std::fmt::Debug for RollSum {
 impl Clone for RollSum {
     fn clone(&self) -> Self {
         RollSum {
+            window: self.window.clone(),
             ..*self
         }
     }
@@ -110,7 +111,7 @@ impl Default for RollSum {
         RollSum {
             s1: ws * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
             s2: ws * (ws-Wrapping(1)) * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
-            window: [0;WINDOW_SIZE],
+            window: vec![0;WINDOW_SIZE].into_boxed_slice(),
             wofs: Wrapping(0),
         }
     }
