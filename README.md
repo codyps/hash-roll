@@ -1,6 +1,7 @@
 # hash-roll
 
-Rolling Hashes in rust with an interface designed for splitting byte strings or iterators
+Rolling Hashes in rust with an interface designed for splitting byte strings or
+iterators
 
 
 [![Documentation](https://img.shields.io/badge/documentation-latest-brightgreen.svg?style=flat)](http://codyps.com/docs/hash-roll/x86_64-unknown-linux-gnu/stable/hash_roll/index.html)

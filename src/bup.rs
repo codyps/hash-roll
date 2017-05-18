@@ -22,10 +22,10 @@ const ROLLSUM_CHAR_OFFSET: usize = 31;
 pub struct RollSum {
     s1: Wrapping<u32>,
     s2: Wrapping<u32>,
-    window: [u8; WINDOW_SIZE],
 
     /// window offset
     wofs: Wrapping<usize>,
+    window: [u8; WINDOW_SIZE],
 }
 
 impl ::std::fmt::Debug for RollSum {
@@ -54,7 +54,7 @@ impl PartialEq for RollSum {
             self.s2 == other.s2 &&
             self.wofs == other.wofs &&
             {
-                for i in 0..WINDOW_SIZE {
+                for i in 0..self.window.len() {
                     if self.window[i] != other.window[i] {
                         return false;
                     }
@@ -77,14 +77,14 @@ impl RollSum {
         self.s1 += Wrapping(add as u32);
         self.s1 -= d;
         self.s2 += self.s1;
-        self.s2 -= Wrapping(WINDOW_SIZE as u32) * (d + Wrapping(ROLLSUM_CHAR_OFFSET as u32));
+        self.s2 -= Wrapping(self.window.len() as u32) * (d + Wrapping(ROLLSUM_CHAR_OFFSET as u32));
     }
 
     pub fn roll_byte(&mut self, ch: u8) {
         let w = self.window[self.wofs.0];
         self.add(w, ch);
         self.window[self.wofs.0] = ch;
-        self.wofs = Wrapping((self.wofs + Wrapping(1)).0 & (WINDOW_SIZE - 1));
+        self.wofs = Wrapping((self.wofs + Wrapping(1)).0 & (self.window.len() - 1));
     }
 
     pub fn roll(&mut self, data: &[u8]) {
@@ -106,9 +106,10 @@ impl RollSum {
 
 impl Default for RollSum {
     fn default() -> Self {
+        let ws = Wrapping(WINDOW_SIZE as u32);
         RollSum {
-            s1: Wrapping(WINDOW_SIZE as u32) * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
-            s2: Wrapping(WINDOW_SIZE as u32) * (Wrapping(WINDOW_SIZE as u32)-Wrapping(1)) * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
+            s1: ws * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
+            s2: ws * (ws-Wrapping(1)) * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
             window: [0;WINDOW_SIZE],
             wofs: Wrapping(0),
         }
