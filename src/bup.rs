@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 use std::num::Wrapping;
-use super::Splitter;
+use super::{Splitter,Split2};
 
 const BLOBBITS: u8 = 13;
 const BLOBSIZE: u32 = 1 << (BLOBBITS as u32);
@@ -117,6 +117,34 @@ impl Default for RollSum {
     }
 }
 
+#[derive(Clone,Debug,Eq,PartialEq)]
+pub struct BupBuf {
+    r: RollSum
+}
+
+impl Default for BupBuf {
+    fn default() -> Self
+    {
+        BupBuf {
+            r: RollSum::default()
+        }
+    }
+}
+
+impl Split2 for BupBuf {
+    fn push(&mut self, data: &[u8]) -> usize
+    {
+        for (i, &v) in data.iter().enumerate() {
+            self.r.roll_byte(v);
+            if self.r.at_split() {
+                return i+1;
+            }
+        }
+
+        0
+    }
+}
+
 #[derive(Clone,Debug, Eq, PartialEq)]
 pub struct Bup {
     _x: PhantomData<()>
@@ -130,16 +158,8 @@ impl Default for Bup {
 
 impl Splitter for Bup {
     fn find_chunk_edge(&self, data: &[u8]) -> usize {
-        let mut r = RollSum::default();
-
-        for (i, &v) in data.iter().enumerate() {
-            r.roll_byte(v);
-            if r.at_split() {
-                return i+1;
-            }
-        }
-
-        return 0;
+        let mut bb = BupBuf::default();
+        bb.push(data)
     }
 
     fn next_iter<'a, T: Iterator<Item=u8>>(&'a self, iter: T) -> Option<Vec<u8>>
@@ -162,28 +182,6 @@ impl Splitter for Bup {
         }
     }
 }
-
-/*
- for (count = 0; count < len; count++)
-    {
-	rollsum_roll(&r, buf[count]);
-	if ((r.s2 & (BUP_BLOBSIZE-1)) == ((~0) & (BUP_BLOBSIZE-1)))
-	{
-	    if (bits)
-	    {
-		unsigned rsum = rollsum_digest(&r);
-		*bits = BUP_BLOBBITS;
-		rsum >>= BUP_BLOBBITS;
-		for (*bits = BUP_BLOBBITS; (rsum >>= 1) & 1; (*bits)++)
-		    ;
-	    }
-	    return count+1;
-	}
-    }
-return 0;
-    }
-}
-*/
 
 #[cfg(test)]
 mod test {

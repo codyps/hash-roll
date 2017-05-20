@@ -48,6 +48,23 @@ pub use rsyncable::Rsyncable;
 #[cfg(all(feature = "nightly", test))]
 mod bench;
 
+/// Something that takes a stream of bytes (represented by a series of slices) and identifies
+/// indexes to split on.
+pub trait Split2 {
+    /// The data "contained" within a implimentor of this trait is the history of all data slices
+    /// passed to feed.
+    ///
+    /// In other words, all previous data (or no previous data) may be used in determining the
+    /// point to split.
+    ///
+    /// Returns 0 if the data has no split point. Otherwise, returns an index in the most recently
+    /// passed `data`.
+    ///
+    /// Note that returning the index in the current slice makes most "look-ahead" splitting
+    /// impossible (as it is permissible to pass 1 byte at a time).
+    fn push(&mut self, data: &[u8]) -> usize;
+}
+
 /// An object with transforms a stream of bytes into chunks, potentially by examining the bytes
 pub trait Splitter
 {
