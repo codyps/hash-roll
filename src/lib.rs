@@ -34,12 +34,23 @@ extern crate fmt_extra;
  * rollsum of librsync
  */
 
+/*
+ * TODO:
+ *
+ * - GearCDC
+ * - FastCDC
+ *
+ */
+
 use std::borrow::Borrow;
 
 pub mod bup;
 pub mod zpaq;
 pub mod rsyncable;
 pub mod buzhash;
+pub mod gear;
+pub mod fastcdc;
+pub mod gear_table;
 
 pub use bup::Bup;
 pub use zpaq::Zpaq;
