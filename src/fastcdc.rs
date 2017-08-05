@@ -28,21 +28,21 @@ pub struct FastCdc8<'a> {
     /// Current fingerprint
     ///
     /// varying state.
-    fp: u64,
+    fp: Wrapping<u64>,
 }
 
 impl<'a> FastCdc8<'a> {
     fn reset(&mut self)
     {
         self.l = 0;
-        self.fp = 0;
+        self.fp = Wrapping(0);
     }
 }
 
 impl<'a> Default for FastCdc8<'a> {
     fn default() -> Self {
         FastCdc8 {
-            fp: 0,
+            fp: Wrapping(0),
             l: 0,
             gear: &super::gear_table::GEAR_64,
         }
@@ -62,45 +62,68 @@ impl<'a> Split2 for FastCdc8<'a> {
             return 0;
         }
 
-        if gl >= MAX_SIZE {
-            // only examine up to max size
-            // XXX: this is likely wrong, need to use src.len()
-            src = &src[..(MAX_SIZE - gi) as usize];
-        } else if gl <= normal_size {
-            // XXX: confirm @wl and not @src.len() is right here
-            normal_size = gl;
-        }
+        // skip elements prior to MIN_SIZE
+        let ibase = if gi <= MIN_SIZE {
+            let skip = MIN_SIZE - gi;
+            src = &src[skip as usize..];
+            gi += skip;
+            skip
+        } else {
+            0
+        } as usize;
 
+        let mut src = src.iter().enumerate();
         let mut fp = self.fp;
-        for i in ((MIN_SIZE - gi) as usize)..((normal_size - gi) as usize) {
-            // FIXME: `i` is wrong here due to us being incremental
-            fp = (fp << 1) + self.gear[src[i] as usize];
-            if (fp & MASK_S) == 0{
+
+        for (i, &v) in &mut src {
+            gi += 1;
+
+            if gi >= normal_size {
+                // go to next set of matches
+                break;
+            }
+
+            fp = (fp << 1) + Wrapping(self.gear[v as usize]);
+            if (fp.0 & MASK_S) == 0{
                 self.reset();
-                return i;
+                return ibase + i;
             }
         }
 
-        let large_start = (normal_size - gi) as usize;
-        for i in large_start..src.len() {
-            fp = (fp << 1) + self.gear[src[i] as usize];
-            if (fp & MASK_L) == 0 {
+        for (i, &v) in &mut src {
+            gi += 1;
+
+            if gi >= MAX_SIZE {
+                // no match found, emit fixed match at MAX_SIZE
                 self.reset();
-                return i;
+                return ibase + i;
+            }
+
+            fp = (fp << 1) + Wrapping(self.gear[v as usize]);
+            if (fp.0 & MASK_L) == 0 {
+                self.reset();
+                return ibase + i;
             }
         }
+
+        // no match, but not at MAX_SIZE yet, so store context for next time.
+        self.fp = fp;
+        self.l = gi;
 
         0
     }
 }
 
+/// A 1-buffer implimentation of FastCDC8KB designed to match the reference pseudocode
 fn fast_cdc_8kb(src: &[u8]) -> usize
 {
-    let mut fp = 0;
+    let mut fp = Wrapping(0);
     let mut n = src.len();
     let mut normal_size = NORMAL_SIZE as usize;
     if n <= (MIN_SIZE as usize) {
-        return n;
+        // Diverge from the reference here:
+        //  return 0 to indicate no split found rather than src.len()
+        return 0;
     }
 
     if n >= (MAX_SIZE as usize){
@@ -110,26 +133,90 @@ fn fast_cdc_8kb(src: &[u8]) -> usize
     }
 
     for i in (MIN_SIZE as usize)..normal_size {
-        fp = (fp << 1) + super::gear_table::GEAR_64[src[i] as usize];
-        if (fp & MASK_S) == 0 {
+        fp = (fp << 1) + Wrapping(super::gear_table::GEAR_64[src[i] as usize]);
+        if (fp.0 & MASK_S) == 0 {
             return i;
         }
     }
 
     for i in normal_size..n {
-        fp = (fp << 1) + super::gear_table::GEAR_64[src[i] as usize];
-        if (fp & MASK_L) == 0 {
+        fp = (fp << 1) + Wrapping(super::gear_table::GEAR_64[src[i] as usize]);
+        if (fp.0 & MASK_L) == 0 {
             return i;
         }
     }
 
-    n
+    // Diverge from the reference here:
+    //  return 0 to indicate no split found rather than src.len()
+    0
 }
 
 #[cfg(test)]
 mod test {
+    use super::*;
+    use quickcheck::{self,quickcheck};
+
+    #[derive(Debug,Clone,PartialEq,Eq)]
+    struct Vec8K {
+        data: Vec<u8>
+    }
+
+    impl quickcheck::Arbitrary for Vec8K {
+        fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Self {
+            // FIXME: the intention is to raise this >8KB, but that makes the tests take far too
+            // long to run.
+            let l = 1 * 1024 + g.size();
+
+            let mut d = vec![0;l];
+
+            g.fill_bytes(&mut d[..]);
+
+            Vec8K {
+                data: d
+            }
+        }
+
+        fn shrink(&self) -> Box<Iterator<Item=Self>> {
+            // use the normal Vec shrinkers
+            let chain = self.data.shrink().map(|x| Vec8K { data: x });
+            Box::new(chain)
+        }
+    }
+
+    fn oracle_1(mut d: Vec8K) -> bool {
+        let mut cdc = FastCdc8::default();
+        let v1 = fast_cdc_8kb(&d.data[..]);
+        let v2 = cdc.push(&d.data[..]);
+
+        v1 == v2
+    }
+
+    fn oracle_1_test(mut data: Vec<u8>) {
+        let mut cdc = FastCdc8::default();
+        let v1 = fast_cdc_8kb(&data[..]);
+        let v2 = cdc.push(&data[..]);
+
+        assert_eq!(v1, v2);
+    }
+
     #[test]
-    fn fc8() {
-        
+    fn o1_empty() {
+        oracle_1_test(vec![0]);
+    }
+
+    #[test]
+    fn o1_qc() {
+        quickcheck(oracle_1 as fn(Vec8K) -> bool);
+    }
+
+    #[test]
+    fn o1_8k1() {
+        use rand::Rng;
+        let mut d = Vec::with_capacity(8*1024*1024 + 1);
+        let c = d.capacity();
+        unsafe { d.set_len(c) };
+        let mut rng = ::rand::thread_rng();
+        rng.fill_bytes(&mut d);
+        oracle_1_test(d);
     }
 }

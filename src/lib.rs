@@ -9,6 +9,8 @@ extern crate histogram;
 extern crate rand;
 #[cfg(test)]
 extern crate rollsum;
+#[cfg(test)]
+extern crate quickcheck;
 
 extern crate fmt_extra;
 
