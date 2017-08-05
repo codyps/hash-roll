@@ -1,10 +1,12 @@
 use std::num::Wrapping;
 use super::{Split2};
 
+// these masks are taken from the paper and could be adjusted/adjustable.
 const MASK_S: u64 = 0x0003590703530000;
-const MASK_A: u64 = 0x0000d90303530000;
+//const MASK_A: u64 = 0x0000d90303530000;
 const MASK_L: u64 = 0x0000d90003530000;
 
+// again, might be useful to allow tuning here.
 const MIN_SIZE: u64 = 2 * 1024; // 2KB
 const MAX_SIZE: u64 = 64 * 1024; // 64KB
 const NORMAL_SIZE: u64 = 8 * 1024; // 8KB
@@ -31,6 +33,43 @@ pub struct FastCdc8<'a> {
     fp: Wrapping<u64>,
 }
 
+impl<'a> ::std::fmt::Debug for FastCdc8<'a> {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error>
+    {
+        f.debug_struct("FastCdc8")
+            .field("gear", &"[...]")
+            .field("l", &self.l)
+            .field("fp", &self.fp.0)
+            .finish()
+    }
+}
+
+impl<'a> Clone for FastCdc8<'a> {
+    fn clone(&self) -> Self {
+        FastCdc8 {
+            ..*self
+        }
+    }
+}
+
+impl<'a> PartialEq for FastCdc8<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.fp == other.fp &&
+            self.l == other.l &&
+            {
+                for i in 0..self.gear.len() {
+                    if self.gear[i] != other.gear[i] {
+                        return false;
+                    }
+                }
+
+                true
+            }
+    }
+}
+
+impl<'a> Eq for FastCdc8<'a> {}
+
 impl<'a> FastCdc8<'a> {
     fn reset(&mut self)
     {
@@ -56,9 +95,9 @@ impl<'a> Split2 for FastCdc8<'a> {
         // global length
         let gl = src.len() as u64 + gi;
 
-        let mut normal_size = NORMAL_SIZE;
         if gl <= MIN_SIZE {
             // No split
+            self.l = gl;
             return 0;
         }
 
@@ -78,7 +117,7 @@ impl<'a> Split2 for FastCdc8<'a> {
         for (i, &v) in &mut src {
             gi += 1;
 
-            if gi >= normal_size {
+            if gi >= NORMAL_SIZE {
                 // go to next set of matches
                 break;
             }
@@ -115,6 +154,7 @@ impl<'a> Split2 for FastCdc8<'a> {
 }
 
 /// A 1-buffer implimentation of FastCDC8KB designed to match the reference pseudocode
+#[cfg(test)]
 fn fast_cdc_8kb(src: &[u8]) -> usize
 {
     let mut fp = Wrapping(0);
@@ -183,7 +223,7 @@ mod test {
         }
     }
 
-    fn oracle_1(mut d: Vec8K) -> bool {
+    fn oracle_1(d: Vec8K) -> bool {
         let mut cdc = FastCdc8::default();
         let v1 = fast_cdc_8kb(&d.data[..]);
         let v2 = cdc.push(&d.data[..]);
@@ -191,7 +231,7 @@ mod test {
         v1 == v2
     }
 
-    fn oracle_1_test(mut data: Vec<u8>) {
+    fn oracle_1_test(data: Vec<u8>) {
         let mut cdc = FastCdc8::default();
         let v1 = fast_cdc_8kb(&data[..]);
         let v2 = cdc.push(&data[..]);
@@ -218,5 +258,33 @@ mod test {
         let mut rng = ::rand::thread_rng();
         rng.fill_bytes(&mut d);
         oracle_1_test(d);
+    }
+
+    #[test]
+    fn feed_until_5_chunks() {
+        use rand::Rng;
+        let mut cdc = FastCdc8::default();
+        let mut ct = 0;
+        let mut rng = ::rand::thread_rng();
+        let mut d = [0u8;256];
+        rng.fill_bytes(&mut d);
+        loop {
+            rng.fill_bytes(&mut d);
+            let mut data = &d[..];
+            loop {
+                let p = cdc.push(&data[..]);
+                println!("p: {}, cdc: {:?}", p, cdc);
+
+                if p == 0 || p == data.len() {
+                    break;
+                } else {
+                    ct += 1;
+                    if ct > 5 {
+                        return;
+                    }
+                    data = &data[p..];
+                }
+            }
+        }
     }
 }
