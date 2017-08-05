@@ -96,7 +96,7 @@ impl<'a> Split2 for FastCdc8<'a> {
         let gl = src.len() as u64 + gi;
 
         if gl <= MIN_SIZE {
-            // No split
+            // No split, no processing of data, but we've "consumed" the bytes.
             self.l = gl;
             return 0;
         }
