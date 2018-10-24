@@ -14,7 +14,7 @@ include = ["Cargo.toml", "**/*.rs", "README.md"]
 nightly = []
 
 [dependencies]
-fmt-extra = "0.1"
+fmt-extra = "0.2"
 
 [dev-dependencies]
 rand = "0.3"
