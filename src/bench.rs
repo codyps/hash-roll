@@ -11,7 +11,7 @@ pub fn split_hashmap<F, I>(b: &mut test::Bencher, bytes: usize, init: F)
     where F: Fn(&[u8]) -> I,
           I: FnMut() -> Option<usize>
 {
-    use rand::Rng;
+    use rand::RngCore;
     use std::collections::HashMap;
     let mut rng = rand::thread_rng();
     let mut d = vec![0u8; bytes];
@@ -41,7 +41,7 @@ pub fn split_hashmap<F, I>(b: &mut test::Bencher, bytes: usize, init: F)
 pub fn split<F>(b: &mut test::Bencher, bytes: usize, _name: &'static str, init: F)
     where for<'a> F: Fn(&'a [u8]) -> Box<FnMut() -> Option<u64> + 'a>
 {
-    use rand::Rng;
+    use rand::RngCore;
     let mut rng = rand::thread_rng();
     let mut d = vec![0u8; bytes];
     b.iter(|| {
@@ -62,7 +62,7 @@ pub fn split<F>(b: &mut test::Bencher, bytes: usize, _name: &'static str, init: 
 pub fn split_histogram<F>(b: &mut test::Bencher, bytes: usize, _name: &'static str, init: F)
     where for<'a> F: Fn(&'a [u8]) -> Box<FnMut() -> Option<u64> + 'a>
 {
-    use rand::Rng;
+    use rand::RngCore;
     use histogram::*;
     let mut rng = rand::thread_rng();
     let mut d = vec![0u8; bytes];
@@ -103,7 +103,7 @@ const BENCH_BYTES : usize = 1024 * 1024 * 4;
 
 #[bench]
 fn bench_rsyncable_vecs (b: &mut test::Bencher) {
-    use rand::Rng;
+    use rand::RngCore;
     let mut rng = rand::thread_rng();
     let mut d = vec![0u8; BENCH_BYTES];
     b.iter(|| {
@@ -115,7 +115,7 @@ fn bench_rsyncable_vecs (b: &mut test::Bencher) {
 
 #[bench]
 fn bench_rsyncable_slices (b: &mut test::Bencher) {
-    use rand::Rng;
+    use rand::RngCore;
     let mut rng = rand::thread_rng();
     let mut d = vec![0u8; BENCH_BYTES];
     b.iter(|| {

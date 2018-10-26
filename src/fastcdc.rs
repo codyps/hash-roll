@@ -251,7 +251,7 @@ mod test {
 
     #[test]
     fn o1_8k1() {
-        use rand::Rng;
+        use rand::RngCore;
         let mut d = Vec::with_capacity(8*1024*1024 + 1);
         let c = d.capacity();
         unsafe { d.set_len(c) };
@@ -262,7 +262,7 @@ mod test {
 
     #[test]
     fn feed_until_5_chunks() {
-        use rand::Rng;
+        use rand::RngCore;
         let mut cdc = FastCdc8::default();
         let mut ct = 0;
         let mut rng = ::rand::thread_rng();
