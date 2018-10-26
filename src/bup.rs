@@ -188,7 +188,7 @@ mod test {
     use super::*;
     use super::super::*;
     use rollsum::Engine;
-    use rand::Rng;
+    use rand::RngCore;
 
     #[test]
     fn rs() {
