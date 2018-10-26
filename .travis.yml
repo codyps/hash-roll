@@ -1,15 +1,12 @@
 language: rust
 
-env:
-  global:
-    - TARGET_ARCH=x86_64
-    - TARGET_VENDOR=-unknown
-    - TARGET_OS=linux-gnu
-
 rust:
   - stable
   - beta
   - nightly
+
+script:
+  - ci/script.sh
 
 matrix:
   exclude:
@@ -17,9 +14,3 @@ matrix:
   include:
     - rust: nightly
       env: FEATURES=nightly
-
-script:
-  - ci/script.sh
-
-after_success:
-  - ci/travis-doc-upload.sh
