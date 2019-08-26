@@ -20,5 +20,5 @@ fmt-extra = "0.2"
 rand = "0.5"
 histogram = "0.6"
 rollsum = "0.2"
-quickcheck = "0.8"
+quickcheck = "0.9"
 
