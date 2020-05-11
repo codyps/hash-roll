@@ -1,3 +1,4 @@
+#![warn(rust_2018_idioms)]
 #![cfg_attr(all(feature = "nightly", test), feature(test))]
 
 #[cfg(all(feature = "nightly", test))]
@@ -256,7 +257,7 @@ impl<'a, T: Splitter> SplitterSlices<'a, T> {
     {
         SplitterSlices {
             parent: i,
-            d: d,
+            d,
         }
     }
 }

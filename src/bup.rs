@@ -29,7 +29,7 @@ pub struct RollSum {
 }
 
 impl ::std::fmt::Debug for RollSum {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error>
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> Result<(), ::std::fmt::Error>
     {
         f.debug_struct("RollSum")
             .field("s1", &self.s1)

@@ -34,7 +34,7 @@ pub struct FastCdc8<'a> {
 }
 
 impl<'a> ::std::fmt::Debug for FastCdc8<'a> {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error>
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> Result<(), ::std::fmt::Error>
     {
         f.debug_struct("FastCdc8")
             .field("gear", &"[...]")
@@ -216,7 +216,7 @@ mod test {
             }
         }
 
-        fn shrink(&self) -> Box<Iterator<Item=Self>> {
+        fn shrink(&self) -> Box<dyn Iterator<Item=Self>> {
             // use the normal Vec shrinkers
             let chain = self.data.shrink().map(|x| Vec8K { data: x });
             Box::new(chain)

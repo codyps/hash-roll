@@ -247,7 +247,7 @@ impl PartialEq for ZpaqHash {
 impl Eq for ZpaqHash {}
 
 impl ::std::fmt::Debug for ZpaqHash {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> Result<(), ::std::fmt::Error> {
         f.debug_struct("ZpaqHash")
             .field("hash", &self.hash)
             .field("last_byte", &self.last_byte)
