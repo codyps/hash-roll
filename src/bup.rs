@@ -186,7 +186,6 @@ impl Splitter for Bup {
 #[cfg(test)]
 mod test {
     use super::*;
-    use super::super::*;
     use rollsum::Engine;
     use rand::RngCore;
 

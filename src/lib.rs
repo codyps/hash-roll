@@ -1,20 +1,6 @@
 #![warn(rust_2018_idioms)]
 #![cfg_attr(all(feature = "nightly", test), feature(test))]
 
-#[cfg(all(feature = "nightly", test))]
-extern crate test;
-#[cfg(all(feature = "nightly", test))]
-extern crate histogram;
-
-#[cfg(test)]
-extern crate rand;
-#[cfg(test)]
-extern crate rollsum;
-#[cfg(test)]
-extern crate quickcheck;
-
-extern crate fmt_extra;
-
 /* TODO: Rabin-Karp
  * H = c_1 * a ** (k-1) + c_2 * a ** (k-2) ... + c_k * a ** 0
  * where:

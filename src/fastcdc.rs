@@ -194,7 +194,6 @@ fn fast_cdc_8kb(src: &[u8]) -> usize
 #[cfg(test)]
 mod test {
     use super::*;
-    use quickcheck::{self,quickcheck};
 
     #[derive(Debug,Clone,PartialEq,Eq)]
     struct Vec8K {
@@ -246,7 +245,7 @@ mod test {
 
     #[test]
     fn o1_qc() {
-        quickcheck(oracle_1 as fn(Vec8K) -> bool);
+        quickcheck::quickcheck(oracle_1 as fn(Vec8K) -> bool);
     }
 
     #[test]
