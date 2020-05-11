@@ -1,4 +1,5 @@
 use std::num::Wrapping;
+use std::fmt;
 use super::{Splitter,Range,Bound};
 
 /**
@@ -246,12 +247,12 @@ impl PartialEq for ZpaqHash {
 
 impl Eq for ZpaqHash {}
 
-impl ::std::fmt::Debug for ZpaqHash {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> Result<(), ::std::fmt::Error> {
+impl fmt::Debug for ZpaqHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         f.debug_struct("ZpaqHash")
             .field("hash", &self.hash)
             .field("last_byte", &self.last_byte)
-            .field("predicted_byte", &::fmt_extra::Hs(&self.predicted_byte[..]))
+            .field("predicted_byte", &fmt_extra::Hs(&self.predicted_byte[..]))
             .finish()
     }
 }

@@ -1,7 +1,4 @@
-extern crate rollsum;
-extern crate hash_roll;
-#[macro_use]
-extern crate quickcheck;
+use quickcheck::quickcheck;
 
 use hash_roll::Splitter;
 

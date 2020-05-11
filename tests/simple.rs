@@ -1,4 +1,3 @@
-extern crate hash_roll;
 use hash_roll::Splitter;
 
 #[test]

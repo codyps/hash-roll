@@ -24,6 +24,10 @@ use std::num::Wrapping;
  */
 
 /// Cyclic polynomial hash (buzhash)
+///
+/// BuzHash is used in:
+///   - [Borg](https://github.com/borgbackup/borg)
+///   - [Attic](https://github.com/jborg/attic)
 #[derive(Debug,Clone,PartialEq,Eq)]
 pub struct BuzHash {
     /// current value of the hash.
@@ -75,7 +79,7 @@ impl BuzHash {
 
 /// Self-contained buzhash which buffers it's window of values internally
 ///
-/// Note that this will be less efficient than using [`BuzHash`](TODO: link) on a slice directly,
+/// Note that this will be less efficient than using [`BuzHash`] on a slice directly,
 /// but may be more convenient.
 #[derive(Debug,Clone,PartialEq,Eq)]
 pub struct BuzHashBuf {
