@@ -1,4 +1,5 @@
 use std::num::Wrapping;
+use std::fmt;
 use super::{Split2};
 
 /// Gear Content Defined Chunking using 32bit expansion.
@@ -29,6 +30,17 @@ pub struct Gear32<'a> {
     /// 
     /// varying state.
     fp: Wrapping<u32>,
+}
+
+impl<'a> fmt::Debug for Gear32<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.debug_struct("Gear32")
+            .field("mask", &self.mask)
+            .field("xxx", &self.xxx)
+            .field("gear", &&self.gear[..])
+            .field("fp", &self.fp)
+            .finish()
+    }
 }
 
 impl<'a> Split2 for Gear32<'a> {

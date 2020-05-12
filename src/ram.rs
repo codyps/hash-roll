@@ -2,7 +2,7 @@
 /// 
 /// - Has a minimum block size (it's "window" size)
 /// - Does not provide an upper bound on block size (though paper discusses a RAML variant that
-///   does)
+///   does).
 ///
 /// doi:10.1016/j.future.2017.02.013
 #[derive(Debug)]

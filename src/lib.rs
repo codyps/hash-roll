@@ -1,4 +1,4 @@
-#![warn(rust_2018_idioms)]
+#![warn(rust_2018_idioms,missing_debug_implementations)]
 /* TODO: Rabin-Karp
  * H = c_1 * a ** (k-1) + c_2 * a ** (k-2) ... + c_k * a ** 0
  * where:
