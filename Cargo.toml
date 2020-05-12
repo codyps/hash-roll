@@ -22,4 +22,8 @@ rand = "0.7.3"
 histogram = "0.6"
 quickcheck = "0.9"
 rollsum = "0.2"
+criterion = "0.3"
 
+[[bench]]
+name = "compare"
+harness = false

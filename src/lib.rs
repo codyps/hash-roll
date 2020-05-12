@@ -1,6 +1,4 @@
 #![warn(rust_2018_idioms)]
-#![cfg_attr(all(feature = "nightly", test), feature(test))]
-
 /* TODO: Rabin-Karp
  * H = c_1 * a ** (k-1) + c_2 * a ** (k-2) ... + c_k * a ** 0
  * where:
@@ -44,9 +42,6 @@ pub mod gear_table;
 pub use bup::Bup;
 pub use zpaq::Zpaq;
 pub use rsyncable::Rsyncable;
-
-#[cfg(all(feature = "nightly", test))]
-mod bench;
 
 /// Something that takes a stream of bytes (represented by a series of slices) and identifies
 /// indexes to split on.
