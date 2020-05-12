@@ -7,8 +7,29 @@
  - AE
  - RollSum
  - BuzHash
+ - LMC (chunking)
+ - RAM Chunking (Rapid  Asymmetric  Maximum)
+   - doi:10.1016/j.future.2017.02.013 
+ - MII (minimal incrimental interval)
+   - doi:10.1109/access.2019.2926195 
+ - 
 
-# Features
+# Algorithm Points of Comparison
+
+ - Ability to constrain block size
+   - distribution
+   - tuneability of distribution
+ - Speed
+   - on different distributions
+ - Common chunk discovery
+   - on different distributions
+ - Common chuck discovery after a byte shift
+   - on different distributions
+ - Common chuck discovery after edit
+   - on different data distributions
+   - under different edit kinds
+
+# Impl Features
 
  - Incrimental input: rather than require a single `&[u8]` up front, allow
    providing a number of `&[u8]`s over the life of the splitter/hasher.
@@ -38,6 +59,7 @@
  - [gearhash](https://docs.rs/gearhash)
    - algorithm(s): gear
    - used in FastCDC
+   - provides simd & scalar impls
    - includes a static table for gearhash
    - `Hasher` trait provides both content splitting and rolling hash features.
      - in-place splitting
