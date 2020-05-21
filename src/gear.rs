@@ -1,6 +1,6 @@
 use std::num::Wrapping;
 use std::fmt;
-use super::{Split2};
+use super::Chunker;
 
 /// Gear Content Defined Chunking using 32bit expansion.
 ///
@@ -43,25 +43,22 @@ impl<'a> fmt::Debug for Gear32<'a> {
     }
 }
 
-impl<'a> Split2 for Gear32<'a> {
-    fn push(&mut self, data: &[u8]) -> usize
+impl<'a> Chunker for Gear32<'a> {
+    fn push(&mut self, data: &[u8]) -> Option<usize>
     {
         let mut fp = self.fp;
-        let xxx = self.xxx;
-        let mask = self.mask;
         for (i, v) in data.iter().enumerate() {
             fp = (fp << 1) + Wrapping(self.gear[*v as usize]);
-            if fp.0 & mask == xxx {
-                // Match found,
-                // TODO: reset internal state
-                return i;
+            if fp.0 & self.mask == self.xxx {
+                self.fp = Wrapping(0);
+                return Some(i);
             }
         }
 
         // no match
         self.fp = fp;
 
-        0
+        None
     }
 }
 

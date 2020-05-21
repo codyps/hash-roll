@@ -1,34 +1,36 @@
 use quickcheck::quickcheck;
 
-use hash_roll::Splitter;
+use hash_roll::Chunker;
 
 quickcheck! {
     fn simple_eq(xs: Vec<u8>) -> bool {
-        let m1 = hash_roll::Bup::default();
+        let mut m1 = hash_roll::Bup::default();
         let mut m2 = rollsum::Bup::default();
 
-        let v1 = m1.find_chunk_edge(&xs);
-        let v2 = m2.find_chunk_edge(&xs).unwrap_or(0);
+        let v1 = m1.push(&xs);
+        let v2 = m2.find_chunk_edge(&xs);
 
         v1 == v2
     }
 
     fn iter_eq(xs: Vec<u8>) -> bool {
-        let m1 = hash_roll::Bup::default();
+        let mut m1 = hash_roll::Bup::default();
         let mut m2 = rollsum::Bup::default();
 
         let mut x = &xs[..];
         loop {
-            let v1 = m1.find_chunk_edge(&x);
-            let v2 = m2.find_chunk_edge(&x).unwrap_or(0);
+            let v1 = m1.push(&x);
+            let v2 = m2.find_chunk_edge(&x);
 
             if v1 != v2 {
                 return false
             }
 
-            if v1 == 0 {
+            if v1 == None {
                 return true
             }
+
+            let v1 = v1.unwrap();
 
             x = &x[v1..];
             if x.len() == 0 {
@@ -39,11 +41,11 @@ quickcheck! {
 }
 
 fn chk_a(x: &[u8]) {
-    let m1 = hash_roll::Bup::default();
+    let mut m1 = hash_roll::Bup::default();
     let mut m2 = rollsum::Bup::default();
 
-    let v1 = m1.find_chunk_edge(&x);
-    let v2 = m2.find_chunk_edge(&x).unwrap_or(0);
+    let v1 = m1.push(&x);
+    let v2 = m2.find_chunk_edge(&x);
 
     assert_eq!(v1,v2);
 }

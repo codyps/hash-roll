@@ -30,6 +30,7 @@
  */
 
 use std::borrow::Borrow;
+use std::mem;
 
 pub mod bup;
 pub mod zpaq;
@@ -47,19 +48,96 @@ pub use rsyncable::Rsyncable;
 
 /// Something that takes a stream of bytes (represented by a series of slices) and identifies
 /// indexes to split on.
-pub trait Split2 {
+pub trait Chunker {
     /// The data "contained" within a implimentor of this trait is the history of all data slices
     /// passed to feed.
     ///
     /// In other words, all previous data (or no previous data) may be used in determining the
     /// point to split.
     ///
-    /// Returns 0 if the data has no split point. Otherwise, returns an index in the most recently
-    /// passed `data`.
+    /// Returns None if the data has no split point.
+    /// Otherwise, returns an index in the most recently passed `data`.
     ///
     /// Note that returning the index in the current slice makes most "look-ahead" splitting
     /// impossible (as it is permissible to pass 1 byte at a time).
-    fn push(&mut self, data: &[u8]) -> usize;
+    fn push(&mut self, data: &[u8]) -> Option<usize>;
+}
+
+/// emit _complete_ slices
+#[derive(Debug)]
+pub struct IterSlices<'a, C: Chunker> {
+    rem: &'a [u8],
+    chunker: C,
+}
+
+impl<'a, C: Chunker> IterSlices<'a, C> {
+    pub fn take_rem(&mut self) -> &'a [u8] {
+        let mut l: &[u8] = &[];
+        mem::swap(&mut self.rem, &mut l);
+        l
+    }
+
+    pub fn into_parts(self) -> (C, &'a[u8]) {
+        (self.chunker, self.rem)
+    }
+}
+
+impl<'a, C: Chunker> Iterator for IterSlices<'a, C> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.chunker.push(self.rem) {
+            None => None,
+            Some(l) => {
+                let (v, rn) = self.rem.split_at(l);
+                self.rem = rn;
+                Some(v)
+            }
+        }
+    }
+}
+
+/// [`iter_slices`] creates this iterator over slices of a single slice
+///
+/// When it runs out of data, it returns the remainder as the last element of the iteration
+#[derive(Debug)]
+pub struct IterSlicesPartial<'a, C: Chunker> {
+    rem: &'a [u8],
+    chunker: C,
+}
+
+impl<'a, C: Chunker> Iterator for IterSlicesPartial<'a, C> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.rem.len() == 0 {
+            return None;
+        }
+
+        match self.chunker.push(self.rem) {
+            None => {
+                let v = self.rem;
+                self.rem = &[];
+                Some(v)
+            },
+            Some(l) => {
+                let (v, rn) = self.rem.split_at(l);
+                self.rem = rn;
+                Some(v)
+            }
+        }
+    }
+}
+
+/// Given a [`Chunker`] and a single slice, return a list of slices chunked by the chunker
+///
+/// Note that this is a non-incrimental interface. Calling this on an already fed chunker or using
+/// this multiple times on the same chunker 
+pub fn iter_slices<'a, C: Chunker>(chunker: C, data: &'a [u8]) -> IterSlices<'a, C> {
+    IterSlices {
+        rem: data,
+        chunker,
+    }
 }
 
 /// An object with transforms a stream of bytes into chunks, potentially by examining the bytes

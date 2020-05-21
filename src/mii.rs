@@ -24,9 +24,10 @@ impl Mii {
             increment: 0,
         }
     }
+}
 
-    /// Examine an input slice for 
-    pub fn find_(&mut self, input: &[u8]) -> Option<usize> {
+impl super::Chunker for Mii {
+    fn push(&mut self, input: &[u8]) -> Option<usize> {
         for (i, b) in input.iter().cloned().enumerate() {
             if b > self.prev {
                 self.increment += 1;

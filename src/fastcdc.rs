@@ -1,5 +1,5 @@
 use std::num::Wrapping;
-use super::{Split2};
+use super::Chunker;
 
 // these masks are taken from the paper and could be adjusted/adjustable.
 const MASK_S: u64 = 0x0003590703530000;
@@ -88,8 +88,8 @@ impl<'a> Default for FastCdc8<'a> {
     }
 }
 
-impl<'a> Split2 for FastCdc8<'a> {
-    fn push(&mut self, mut src: &[u8]) -> usize {
+impl<'a> Chunker for FastCdc8<'a> {
+    fn push(&mut self, mut src: &[u8]) -> Option<usize> {
         // global index
         let mut gi = self.l;
         // global length
@@ -98,10 +98,11 @@ impl<'a> Split2 for FastCdc8<'a> {
         if gl <= MIN_SIZE {
             // No split, no processing of data, but we've "consumed" the bytes.
             self.l = gl;
-            return 0;
+            return None;
         }
 
-        // skip elements prior to MIN_SIZE
+        // skip elements prior to MIN_SIZE and track offset of new `src` in argument `src` for
+        // return value
         let ibase = if gi <= MIN_SIZE {
             let skip = MIN_SIZE - gi;
             src = &src[skip as usize..];
@@ -123,9 +124,9 @@ impl<'a> Split2 for FastCdc8<'a> {
             }
 
             fp = (fp << 1) + Wrapping(self.gear[v as usize]);
-            if (fp.0 & MASK_S) == 0{
+            if (fp.0 & MASK_S) == 0 {
                 self.reset();
-                return ibase + i;
+                return Some(ibase + i);
             }
         }
 
@@ -135,13 +136,13 @@ impl<'a> Split2 for FastCdc8<'a> {
             if gi >= MAX_SIZE {
                 // no match found, emit fixed match at MAX_SIZE
                 self.reset();
-                return ibase + i;
+                return Some(ibase + i);
             }
 
             fp = (fp << 1) + Wrapping(self.gear[v as usize]);
             if (fp.0 & MASK_L) == 0 {
                 self.reset();
-                return ibase + i;
+                return Some(ibase + i);
             }
         }
 
@@ -149,7 +150,7 @@ impl<'a> Split2 for FastCdc8<'a> {
         self.fp = fp;
         self.l = gi;
 
-        0
+        None
     }
 }
 
@@ -227,13 +228,13 @@ mod test {
         let v1 = fast_cdc_8kb(&d.data[..]);
         let v2 = cdc.push(&d.data[..]);
 
-        v1 == v2
+        v1 == v2.unwrap_or(0)
     }
 
     fn oracle_1_test(data: Vec<u8>) {
         let mut cdc = FastCdc8::default();
         let v1 = fast_cdc_8kb(&data[..]);
-        let v2 = cdc.push(&data[..]);
+        let v2 = cdc.push(&data[..]).unwrap_or(0);
 
         assert_eq!(v1, v2);
     }
@@ -272,16 +273,16 @@ mod test {
             let mut data = &d[..];
             loop {
                 let p = cdc.push(&data[..]);
-                println!("p: {}, cdc: {:?}", p, cdc);
+                println!("p: {:?}, cdc: {:?}", p, cdc);
 
-                if p == 0 || p == data.len() {
+                if p == None || p.unwrap() == data.len() {
                     break;
                 } else {
                     ct += 1;
                     if ct > 5 {
                         return;
                     }
-                    data = &data[p..];
+                    data = &data[p.unwrap()..];
                 }
             }
         }

@@ -1,6 +1,5 @@
-use std::marker::PhantomData;
 use std::num::Wrapping;
-use super::{Splitter,Split2};
+use super::Chunker;
 
 const BLOBBITS: u8 = 13;
 const BLOBSIZE: u32 = 1 << (BLOBBITS as u32);
@@ -118,68 +117,30 @@ impl Default for RollSum {
 }
 
 #[derive(Clone,Debug,Eq,PartialEq)]
-pub struct BupBuf {
+pub struct Bup {
     r: RollSum
 }
 
-impl Default for BupBuf {
+impl Default for Bup {
     fn default() -> Self
     {
-        BupBuf {
+        Bup {
             r: RollSum::default()
         }
     }
 }
 
-impl Split2 for BupBuf {
-    fn push(&mut self, data: &[u8]) -> usize
+impl Chunker for Bup {
+    fn push(&mut self, data: &[u8]) -> Option<usize>
     {
         for (i, &v) in data.iter().enumerate() {
             self.r.roll_byte(v);
             if self.r.at_split() {
-                return i+1;
+                return Some(i+1);
             }
         }
 
-        0
-    }
-}
-
-#[derive(Clone,Debug, Eq, PartialEq)]
-pub struct Bup {
-    _x: PhantomData<()>
-}
-
-impl Default for Bup {
-    fn default() -> Self {
-        Bup { _x: PhantomData }
-    }
-}
-
-impl Splitter for Bup {
-    fn find_chunk_edge(&self, data: &[u8]) -> usize {
-        let mut bb = BupBuf::default();
-        bb.push(data)
-    }
-
-    fn next_iter<'a, T: Iterator<Item=u8>>(&'a self, iter: T) -> Option<Vec<u8>>
-    {
-        let mut r = RollSum::default();
-        let a = r.window.len() + r.window.len() / 2;
-        let mut data = Vec::with_capacity(a);
-        for v in iter {
-            data.push(v);
-            r.roll_byte(v);
-            if r.at_split() {
-                return Some(data)
-            }
-        }
-
-        if data.is_empty() {
-            None
-        } else {
-            Some(data)
-        }
+        None
     }
 }
 
@@ -234,7 +195,8 @@ mod test {
 
     #[test]
     fn compare_bup() {
-        let m1 = Bup::default();
+        use super::Chunker;
+        let mut m1 = Bup::default();
         let mut m2 = rollsum::Bup::default();
 
         let mut r = rand::thread_rng();
@@ -242,11 +204,17 @@ mod test {
 
         r.fill_bytes(&mut b);
 
-        let v1 = m1.find_chunk_edge(&b);
-        let v2 = m2.find_chunk_edge(&b).unwrap_or(0);
+        let mut x = &b[..];
+        loop {
+            let v1 = m1.push(&x);
+            let v2 = m2.find_chunk_edge(&x);
+            assert_eq!(v1, v2);
 
-
-        assert_eq!(v1, v2);
+            match v1 {
+                None => break,
+                Some(v) => { x = &x[v..]; }
+            }
+        }
     }
 }
 
