@@ -1,6 +1,6 @@
 use std::num::Wrapping;
 use std::fmt;
-use super::Chunker;
+use super::ChunkIncr;
 
 /// Gear Content Defined Chunking using 32bit expansion.
 ///
@@ -43,7 +43,7 @@ impl<'a> fmt::Debug for Gear32<'a> {
     }
 }
 
-impl<'a> Chunker for Gear32<'a> {
+impl<'a> ChunkIncr for Gear32<'a> {
     fn push(&mut self, data: &[u8]) -> Option<usize>
     {
         let mut fp = self.fp;

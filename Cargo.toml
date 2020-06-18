@@ -10,12 +10,9 @@ documentation = "https://docs.rs/hash-roll"
 include = ["Cargo.toml", "**/*.rs", "README.md", "COMPARE.md"]
 edition = "2018"
 
-[features]
-# Enable things that require nightly rust (benchmarks)
-nightly = []
-
 [dependencies]
 fmt-extra = "0.2"
+#circbuf = "0.1.4"
 
 [dev-dependencies]
 rand = "0.7.3"

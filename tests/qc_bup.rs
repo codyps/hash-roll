@@ -1,6 +1,6 @@
 use quickcheck::quickcheck;
 
-use hash_roll::Chunker;
+use hash_roll::ChunkIncr;
 
 quickcheck! {
     fn simple_eq(xs: Vec<u8>) -> bool {
@@ -52,7 +52,7 @@ fn chk_a(x: &[u8]) {
 
 fn chk_b(x: &[u8]) {
     use rollsum::Engine;
-    let mut m1 = hash_roll::bup::RollSum::default();
+    let mut m1 = hash_roll::bup::RollSumIncr::default();
     let mut m2 = rollsum::Bup::default();
     let cm = (1<<rollsum::bup::CHUNK_BITS) - 1;
 

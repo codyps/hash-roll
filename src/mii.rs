@@ -26,7 +26,7 @@ impl Mii {
     }
 }
 
-impl super::Chunker for Mii {
+impl super::ChunkIncr for Mii {
     fn push(&mut self, input: &[u8]) -> Option<usize> {
         for (i, b) in input.iter().cloned().enumerate() {
             if b > self.prev {

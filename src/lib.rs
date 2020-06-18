@@ -1,3 +1,4 @@
+//! Content defined chunking
 #![warn(rust_2018_idioms,missing_debug_implementations)]
 /* TODO: Rabin-Karp
  * H = c_1 * a ** (k-1) + c_2 * a ** (k-2) ... + c_k * a ** 0
@@ -42,13 +43,18 @@ pub mod gear_table;
 pub mod mii;
 pub mod ram;
 
-pub use bup::Bup;
+pub use bup::RollSumIncr as Bup;
 pub use zpaq::Zpaq;
 pub use rsyncable::Rsyncable;
 
-/// Something that takes a stream of bytes (represented by a series of slices) and identifies
-/// indexes to split on.
-pub trait Chunker {
+/// Accept incrimental input and provide indexes of split points
+///
+/// Note that for some splitting/chunking algorithms, this mechanism will be less efficient. In
+/// particular, algorithms like [`Rsyncable`] that require the use of previously examined data to
+/// shift their "window" (resulting in needing a circular buffer which all inputed data passes
+/// through) will perform more poorly using [`ChunkIncr`] compared with internal or one-shot
+/// interfaces.
+pub trait ChunkIncr {
     /// The data "contained" within a implimentor of this trait is the history of all data slices
     /// passed to feed.
     ///
@@ -65,12 +71,12 @@ pub trait Chunker {
 
 /// emit _complete_ slices
 #[derive(Debug)]
-pub struct IterSlices<'a, C: Chunker> {
+pub struct IterSlices<'a, C: ChunkIncr> {
     rem: &'a [u8],
     chunker: C,
 }
 
-impl<'a, C: Chunker> IterSlices<'a, C> {
+impl<'a, C: ChunkIncr> IterSlices<'a, C> {
     pub fn take_rem(&mut self) -> &'a [u8] {
         let mut l: &[u8] = &[];
         mem::swap(&mut self.rem, &mut l);
@@ -82,7 +88,7 @@ impl<'a, C: Chunker> IterSlices<'a, C> {
     }
 }
 
-impl<'a, C: Chunker> Iterator for IterSlices<'a, C> {
+impl<'a, C: ChunkIncr> Iterator for IterSlices<'a, C> {
     type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -101,12 +107,12 @@ impl<'a, C: Chunker> Iterator for IterSlices<'a, C> {
 ///
 /// When it runs out of data, it returns the remainder as the last element of the iteration
 #[derive(Debug)]
-pub struct IterSlicesPartial<'a, C: Chunker> {
+pub struct IterSlicesPartial<'a, C: ChunkIncr> {
     rem: &'a [u8],
     chunker: C,
 }
 
-impl<'a, C: Chunker> Iterator for IterSlicesPartial<'a, C> {
+impl<'a, C: ChunkIncr> Iterator for IterSlicesPartial<'a, C> {
     type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -129,11 +135,11 @@ impl<'a, C: Chunker> Iterator for IterSlicesPartial<'a, C> {
     }
 }
 
-/// Given a [`Chunker`] and a single slice, return a list of slices chunked by the chunker
+/// Given a [`ChunkIncr`] and a single slice, return a list of slices chunked by the chunker
 ///
 /// Note that this is a non-incrimental interface. Calling this on an already fed chunker or using
 /// this multiple times on the same chunker 
-pub fn iter_slices<'a, C: Chunker>(chunker: C, data: &'a [u8]) -> IterSlices<'a, C> {
+pub fn iter_slices<'a, C: ChunkIncr>(chunker: C, data: &'a [u8]) -> IterSlices<'a, C> {
     IterSlices {
         rem: data,
         chunker,
@@ -389,46 +395,3 @@ impl<T: Iterator<Item=u8>, P: Splitter> Iterator for SplitterVecs<T, P> {
     }
 }
 
-#[test]
-fn test_rsyncable() {
-    use std::collections::HashSet;
-
-    let d1 = b"hello, this is some bytes";
-    let mut d2 = d1.clone();
-    d2[4] = ':' as u8;
-
-    let b1 = Rsyncable::with_window_and_modulus(4, 8).into_vecs(d1.iter().cloned());
-    let b2 = Rsyncable::with_window_and_modulus(4, 8).into_vecs(d2.iter().cloned());
-
-    let c1 = b1.clone().count();
-    let c2 = b2.clone().count();
-
-    /* XXX: in this contrived case, we generate the same number of blocks.
-     * We should generalize this test to guess at "reasonable" differences in block size
-     */
-    assert_eq!(c1, 4);
-    assert!((c1 as i64 - c2 as i64).abs() < 1);
-
-    /* check that some blocks match up */
-
-    let mut blocks = HashSet::with_capacity(c1);
-    let mut common_in_b1 = 0u64;
-    for b in b1 {
-        if !blocks.insert(b) {
-            common_in_b1 += 1;
-        }
-    }
-
-    println!("common in b1: {}", common_in_b1);
-
-    let mut shared_blocks = 0u64;
-    for b in b2 {
-        if blocks.contains(&b) {
-            shared_blocks += 1;
-        }
-    }
-
-    /* XXX: this is not a generic test, we can't rely on it */
-    println!("shared blocks: {}", shared_blocks);
-    assert!(shared_blocks > (c1 as u64) / 2);
-}

@@ -178,7 +178,7 @@ fn bench_bup(b: &mut Criterion) {
         let z = Bup::default();
         let mut pos = 0;
         Box::new(move || {
-            let l = z.find_chunk_edge(&data[pos..]);
+            let l = z.push(&data[pos..]);
             if l == 0 {
                 None 
             } else {
