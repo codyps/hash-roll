@@ -1,6 +1,9 @@
 use std::num::Wrapping;
 use std::fmt;
-use super::{Splitter,Range,Bound};
+
+use std::ops::Bound;
+use std::ops::RangeBounds;
+use crate::{RangeExt, Splitter};
 
 /**
  * A splitter used in go 'dedup' and zpaq that does not require looking back in the source
@@ -42,7 +45,7 @@ use super::{Splitter,Range,Bound};
 pub struct Zpaq
 {
     /* FIXME: layout optimization? Is that even needed in rust? */
-    range: Range<usize>,
+    range: (Bound<usize>, Bound<usize>),
     fragment: u8,
     max_hash: u32,
 }
@@ -56,16 +59,16 @@ impl Zpaq {
     }
 
     /* these are based on the zpaq (not go-dedup) calculations */
-    fn fragment_ave_from_range(range: &Range<usize>) -> u8
+    fn fragment_ave_from_range<T: RangeBounds<usize>> (range: T) -> u8
     {
-        let v = match range.upper {
-            Bound::Included(i) => i,
-            Bound::Excluded(i) => i - 1,
+        let v = match range.end_bound() {
+            Bound::Included(i) => *i,
+            Bound::Excluded(i) => *i - 1,
             Bound::Unbounded => {
                 /* try to guess based on first */
-                64 * match range.lower {
-                    Bound::Included(i) => i,
-                    Bound::Excluded(i) => i + 1,
+                64 * match range.start_bound() {
+                    Bound::Included(i) => *i,
+                    Bound::Excluded(i) => *i + 1,
                     Bound::Unbounded => {
                         /* welp, lets use the default */
                         return 6;
@@ -78,15 +81,15 @@ impl Zpaq {
     }
 
     /* these are based on the zpaq (not go-dedup) calculations */
-    fn range_from_fragment_ave(fragment_ave: u8) -> Range<usize>
+    fn range_from_fragment_ave(fragment_ave: u8) -> impl RangeBounds<usize>
     {
         assert!(fragment_ave <= 22);
-        Range::from_inclusive(64<<fragment_ave..8128<<fragment_ave)
+        64<<fragment_ave..8128<<fragment_ave
     }
 
-    fn range_from_max(max: usize) -> Range<usize>
+    fn range_from_max(max: usize) -> impl RangeBounds<usize>
     {
-        Range::from_inclusive(max/64..max)
+        max/64..max
     }
 
     fn max_hash_from_fragment_ave(fragment_ave: u8) -> u32
@@ -107,9 +110,9 @@ impl Zpaq {
      * The average block size will be the max block size (if any) divided by 4, using the same
      * algorithm to calculate it as go-dedup.
      */
-    pub fn with_range(range: Range<usize>) -> Self
+    pub fn with_range(range: impl RangeBounds<usize> + Clone) -> Self
     {
-        let f = Self::fragment_ave_from_range(&range);
+        let f = Self::fragment_ave_from_range(range.clone());
         Self::with_average_and_range(f, range)
     }
 
@@ -142,10 +145,10 @@ impl Zpaq {
      *
      * All the other constructors use this internally
      */
-    pub fn with_average_and_range(average_size_base_2: u8, range: Range<usize>) -> Self
+    pub fn with_average_and_range(average_size_base_2: u8, range: impl RangeBounds<usize>) -> Self
     {
         Zpaq {
-            range: range,
+            range: range.into_tuple(),
             fragment: average_size_base_2,
             max_hash: Self::max_hash_from_fragment_ave(average_size_base_2),
         }

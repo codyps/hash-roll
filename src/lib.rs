@@ -78,6 +78,7 @@
 use std::borrow::Borrow;
 use std::mem;
 
+pub mod range;
 pub mod bup;
 pub mod zpaq;
 pub mod rsyncable;
@@ -91,6 +92,8 @@ pub mod ram;
 pub use bup::RollSumIncr as Bup;
 pub use zpaq::Zpaq;
 pub use rsyncable::Rsyncable;
+
+pub(crate) use range::RangeExt;
 
 /// Accept incrimental input and provide indexes of split points
 ///
@@ -292,78 +295,6 @@ impl<'a, S: Splitter + ?Sized> Splitter for &'a S {
     fn next_iter<T: Iterator<Item=u8>>(&self, iter: T) -> Option<Vec<u8>>
     {
         (*self).next_iter(iter)
-    }
-}
-
-#[derive(Clone, Debug, Copy, PartialEq, Eq)]
-pub enum Bound<T> {
-    Included(T),
-    Excluded(T),
-    Unbounded,
-}
-
-#[derive(Clone, Debug, Copy, PartialEq, Eq)]
-pub struct Range<T> {
-    pub lower: Bound<T>,
-    pub upper: Bound<T>
-}
-
-impl<T> Range<T> {
-    #[allow(dead_code)]
-    fn new() -> Self
-    {
-        Range { lower: Bound::Unbounded, upper: Bound::Unbounded }
-    }
-
-    #[allow(dead_code)]
-    fn from_range(r: std::ops::Range<T>) -> Self
-    {
-        Range { lower: Bound::Included(r.start), upper: Bound::Excluded(r.end) }
-    }
-
-    fn from_inclusive(r: std::ops::Range<T>) -> Self
-    {
-        Range { lower: Bound::Included(r.start), upper: Bound::Included(r.end) }
-    }
-
-    fn exceeds_max(&self, item: &T) -> bool
-        where T: PartialOrd<T>
-    {
-        match self.upper {
-            Bound::Included(ref i) => if item > i { return true; },
-            Bound::Excluded(ref i) => if item >= i { return true; },
-            Bound::Unbounded => {}
-        }
-
-        false
-    }
-
-    fn under_min(&self, item: &T) -> bool
-        where T: PartialOrd<T>
-    {
-        match self.lower {
-            Bound::Included(ref i) => if item < i { return true; },
-            Bound::Excluded(ref i) => if item <= i { return true; },
-            Bound::Unbounded => {}
-        }
-
-        false
-    }
-
-    #[allow(dead_code)]
-    fn contains(&self, item: &T) -> bool
-        where T: PartialOrd<T>
-    {
-        /* not excluded by lower */
-        if self.under_min(item) {
-            return false;
-        }
-
-        if self.exceeds_max(item) {
-            return false;
-        }
-
-        true
     }
 }
 
