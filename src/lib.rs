@@ -52,6 +52,18 @@
 //!  - stream data through
 //!    - incrimenal: yes
 //!    - input: `&[u8]`
+
+
+// # API Design Notes
+//
+// ## What methods should be in a trait? What should be in wrapper structs?
+//
+//  - place methods that might have more optimized variants, but can have common implimentations,
+//    in a trait. This notably affects window-buffering differences: it's always possible to
+//    impliment all-at-once processing using incrimental interfaces that internally buffer, but
+//    it's much more efficient for window-buffering algorithms to provide implimentations that know
+//    how to look into the input data directly.
+
 #![warn(rust_2018_idioms,missing_debug_implementations)]
 /* TODO: Rabin-Karp
  * H = c_1 * a ** (k-1) + c_2 * a ** (k-2) ... + c_k * a ** 0
