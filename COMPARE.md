@@ -40,7 +40,9 @@
 
 # Implimentations
 
- - [cdc](https://lib.rs/crates/cdc) (latest release: 2017-09-09)
+ - [cdc](https://lib.rs/crates/cdc)
+   - latest release: 2017-09-09
+     - inactive development (as of 2020-06-21)
    - algorithm(s): "Rabin64" (polynomial based, 64-bit)
    - incrimental input: no
      - no documentation indicates incrimental input is possible
@@ -62,6 +64,7 @@
    - documentation is lacking (almost universally missing)
  - [fastcdc](https://lib.rs/crates/fastcdc)
    - latest release: 2020-03-19, v1.0.3
+     - active development (as of 2020-06-21)
    - algorithm(s): FastCDC
    - incrimental input: no
    - api:
@@ -76,6 +79,7 @@
    - provides a fixed table for fastcdc (generated via a reproducable mechanism initially)
  - [quickcdc](https://lib.rs/crates/quickcdc)
    - latest release: 2018-12-17 v1.0.0 (no other releases)
+     - inactive development (as of 2020-06-21)
    - algorithm(s): AE (with modifications/extensions)
    - incrimental input: no
    - api:
@@ -89,6 +93,7 @@
      unsafe).
  - [gearhash](https://lib.rs/crates/gearhash)
    - latest release: 2020-04-12 v0.1.3
+     - active development (as of 2020-06-21)
    - algorithm(s): gear
    - incrimental input: yes
    - provides simd & scalar impls
@@ -103,6 +108,7 @@
    - no struct representation of configuration (only mixes mutable and immutable data)
  - [cdchunking](https://lib.rs/crates/cdchunking)
    - latest release: 2019-11-02 v1.0.0
+     - inactive development (as of 2020-06-21)
    - algorithm(s): Zpaq
    - provides a chunker-impl trait
    - api: call `next_boundary()` repeatedly with new slices. Returns a
@@ -119,6 +125,7 @@
      - from a `&[u8]` to an `Iterator<Item=[u8]>`
  - [rollsum](https://lib.rs/crates/rollsum)
    - latest release: 2016-05-30 v0.2.1
+     - inactive development (as of 2020-06-21)
    - algorithm(s): rollsum (based on bupsplit, based on rsync chunking)
    - low level trait has byte-by-byte and slice based interfaces
    - exposes conditionality of chunk edge (ie: like a rolling-sum) in trait,
@@ -130,9 +137,15 @@
      start of the next chunk).
  - [rededup-cdc](https://lib.rs/crates/rdedup-cdc)
    - `rollsum` fork
- - [bitar](https://crates.io/crates/bitar)
-   - active development (as of v0.6.4 release on 2020-05-07)
+ - [bitar](https://lib.rs/crates/bitar)
+   - latest release: 2020-06-09 v0.7.0
+     - active development (as of 2020-06-21)
    - algorithms(s): BuzHash, RollSum
+   - uses enum to abstract over algorithms (`Config` and `Chunker`)
+   - includes seperate immutable "configuration object" concept (`Config`)
+   - supports/requires use of `tokio::AsyncRead` as input
+   - api: provide a `AsyncRead` when constructing the `Chunker`. Use the
+     `futures::Stream<Item=Result<(u64, Bytes)>>` it returns
    - low-level trait for each hash is byte-at-a-time
    - many other items included in the library (designed to support the cmdline tool `bita`)
  - [zvault](https://github.com/dswd/zvault)
