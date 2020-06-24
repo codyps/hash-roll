@@ -414,7 +414,7 @@ impl<T, P: Splitter> SplitterVecs<T, P> {
     {
         SplitterVecs {
             parent: i,
-            d: d,
+            d,
         }
     }
 }
