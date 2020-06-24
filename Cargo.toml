@@ -20,6 +20,7 @@ histogram = "0.6"
 quickcheck = "0.9"
 rollsum = "0.2"
 criterion = "0.3"
+rand_pcg = "0.2.1"
 
 [[bench]]
 name = "compare"

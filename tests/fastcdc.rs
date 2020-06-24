@@ -1,5 +1,6 @@
 use hash_roll::fastcdc::FastCdcIncr;
 use hash_roll::ChunkIncr;
+use rand_pcg::Pcg64;
 
 #[derive(Debug,Clone,PartialEq,Eq)]
 struct Vec8K {
@@ -40,7 +41,6 @@ fn oracle_1_test(data: &[u8]) {
     let mut cdc = FastCdcIncr::default();
     let v1 = fast_cdc_8kb(&data[..]);
     let v2 = cdc.push(&data[..]).unwrap_or(0);
-
     assert_eq!(v1, v2);
 }
 
@@ -54,17 +54,35 @@ fn o1_qc() {
     quickcheck::quickcheck(oracle_1 as fn(Vec8K) -> bool);
 }
 
-#[test]
-fn o1_8k1() {
+fn o1_8k_seed(state: u128) {
     use rand::RngCore;
-    let mut d = Vec::with_capacity(8*1024*1024 + 1);
+    let l = 8 * 1024 * 1024 + 1;
+    let mut d = Vec::with_capacity(l);
     let c = d.capacity();
     unsafe { d.set_len(c) };
-    let mut rng = ::rand::thread_rng();
+    println!("seed: {:#x}", state);
+    println!("len: {}", c);
+    let mut rng = Pcg64::new(state, 0xa02bdbf7bb3c0a7ac28fa16a64abf96);
     for _ in 0..10 {
         rng.fill_bytes(&mut d);
         oracle_1_test(&d);
     }
+}
+
+#[test]
+fn o1_8k1() {
+    let state: u128 = ::rand::random();
+    o1_8k_seed(state);
+}
+
+#[test]
+fn o1_8k_t1() {
+    o1_8k_seed(0x6362eca4ca113c1bd10d40b8b10e9ad4);
+}
+
+#[test]
+fn o1_8k_t2() {
+    o1_8k_seed(0x22e622e48004575fe4229bf0da6341c9);
 }
 
 #[test]
@@ -138,7 +156,12 @@ fn fast_cdc_8kb(src: &[u8]) -> usize
     }
 
     // Diverge from the reference here:
+    //  return MAX_SIZE when we've gotten to MAX_SIZE
     //  return 0 to indicate no split found rather than src.len()
-    0
+    if n == MAX_SIZE as usize {
+        n
+    } else {
+        0
+    }
 }
 

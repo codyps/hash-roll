@@ -114,7 +114,7 @@ impl<'a> FastCdcIncr<'a> {
 }
 
 impl<'a> ChunkIncr for FastCdcIncr<'a> {
-    fn push(&mut self, mut src: &[u8]) -> Option<usize> {
+    fn push(&mut self, src: &[u8]) -> Option<usize> {
         // global start/index
         let mut gi = self.l;
         // global end
@@ -128,49 +128,55 @@ impl<'a> ChunkIncr for FastCdcIncr<'a> {
 
         // skip elements prior to MIN_SIZE and track offset of new `src` in argument `src` for
         // return value
-        let ibase = if gi <= self.params.min_size {
+        let mut i = if gi <= self.params.min_size {
             let skip = self.params.min_size - gi;
-            src = &src[skip as usize..];
             gi += skip;
             skip
         } else {
             0
         } as usize;
 
-        let mut src = src.iter().enumerate();
         let mut fp = self.fp;
 
-        if gi < self.params.normal_size {
-            for (i, &v) in &mut src {
-                gi += 1;
-
-                if gi >= self.params.normal_size {
-                    // go to next set of matches
-                    break;
-                }
-
-                fp = (fp << 1) + Wrapping(self.params.gear[v as usize]);
-                if (fp.0 & MASK_S) == 0 {
-                    self.reset();
-                    return Some(ibase + i);
-                }
+        loop {
+            if i >= src.len() {
+                break;
             }
+            if gi >= self.params.normal_size {
+                // go to next set of matches
+                break;
+            }
+
+            let v = src[i];
+            fp = (fp << 1) + Wrapping(self.params.gear[v as usize]);
+            if (fp.0 & MASK_S) == 0 {
+                self.reset();
+                return Some(i);
+            }
+
+            gi += 1;
+            i  += 1;
         }
 
-        for (i, &v) in &mut src {
-            gi += 1;
-
+        loop {
             if gi >= self.params.max_size {
                 // no match found, emit fixed match at MAX_SIZE
                 self.reset();
-                return Some(ibase + i);
+                return Some(i);
+            }
+            if i >= src.len() {
+                break;
             }
 
+            let v = src[i];
             fp = (fp << 1) + Wrapping(self.params.gear[v as usize]);
             if (fp.0 & MASK_L) == 0 {
                 self.reset();
-                return Some(ibase + i);
+                return Some(i);
             }
+
+            gi += 1;
+            i += 1;
         }
 
         // no match, but not at MAX_SIZE yet, so store context for next time.
