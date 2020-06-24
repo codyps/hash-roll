@@ -215,6 +215,49 @@ impl<'a, C: ChunkIncr> Iterator for IterSlicesPartial<'a, C> {
     }
 }
 
+/// Impl on algorthms that define methods of chunking data
+pub trait Chunk {
+    /// `SearchState` allows searching for the chunk edge to resume without duplicating work
+    /// already done.
+    type SearchState;
+
+    /// `Incr` provide the incrimental interface to this chunking instance
+    type Incr : ChunkIncr;
+    
+    /// Find the location in `data` to split the data
+    ///
+    /// If no split point is found, the `SearchState` is returned. One should only use the
+    /// `SearchState` if `find_chunk_edge()` will be called again with a new `data` that consists
+    /// of the previous `data` with a suffix added. In other words, if `data` is extended with
+    /// additional bytes.
+    ///
+    /// An alternate that doesn't require repeatedly passing `data` is the [`incrimental()`]
+    /// incrimental api.
+    ///
+    /// Note: calling with a previous `state` with a new `data` that isn't an extention of the
+    /// previous `data` will result in split points that may not follow the design of the
+    /// underlying algorithm. Avoid relying on consistent cut points to reason about memory safety.
+    ///
+    // Potential pitfal: for better performance, keeping the return value small is a very good
+    // idea. By returning `SearchState`, we've potentially enlarged the return value quite a bit.
+    //
+    // Another alterate here is to have one pass in a `&mut SearchState`. The downside is that it
+    // would then need to be cleared to prevent common issues with re-use (ie: we expect to see a
+    // loop with a single `SearchState`, and requring explicit `reset()`ing of the `SearchState`
+    // will increase error rates.
+    fn find_chunk_edge(&self, state: Option<Self::SearchState>, data: &[u8]) -> Result<usize, Self::SearchState>;
+
+    /// `incrimental()` returns a [`ChunkIncr`] which can be incrimentally fed data and emits
+    /// chunks.
+    ///
+    /// This allows avoiding having to buffer all data in memory, and avoids the need to use a
+    /// single buffer (even if all data is in memory).
+    ///
+    /// Note that some algorithms that need to look back through their data to update their state
+    /// will be less efficient when the incrimental interface is used
+    fn incrimental(&self) -> Self::Incr;
+}
+
 /// `Splitter`s define how to split a stream of bytes into chunks. They are instances of CDC
 /// algorthims with their parameters.
 ///
