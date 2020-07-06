@@ -238,6 +238,8 @@ pub trait Chunk {
     /// previous `data` will result in split points that may not follow the design of the
     /// underlying algorithm. Avoid relying on consistent cut points to reason about memory safety.
     ///
+    /// Note: if this returns a cut point (as `Ok(usize)`), and you want further splitting, you
+    /// should pass the _remainder_ of the `data` with `state: None`.
     // Potential pitfal: for better performance, keeping the return value small is a very good
     // idea. By returning `SearchState`, we've potentially enlarged the return value quite a bit.
     //
