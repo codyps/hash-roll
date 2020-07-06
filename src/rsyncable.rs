@@ -1,5 +1,5 @@
 use std::num::Wrapping;
-use crate::{ChunkIncr, Splitter};
+use crate::{ChunkIncr, Splitter, Chunk};
 use std::collections::VecDeque;
 
 /// Window-based splitter using a simple accumulator & modulus hash.
@@ -54,19 +54,58 @@ pub struct Rsyncable {
     modulus: u64,
 }
 
+impl Rsyncable {
+    pub fn with_window_and_modulus(window: usize, modulus: u64) -> Rsyncable
+    {
+        Rsyncable { window_len: window, modulus }
+    }
+}
+
+impl Default for Rsyncable {
+    fn default() -> Self {
+        Self::with_window_and_modulus(8192, 4096)
+    }
+}
+
+impl Chunk for Rsyncable {
+    type SearchState = RsyncableSearchState;
+    type Incr = RsyncableIncr;
+
+    fn find_chunk_edge(&self, state: Option<Self::SearchState>, data: &[u8]) -> Result<usize, Self::SearchState> {
+        let mut hs = match state {
+            Some(v) => v,
+            None => RsyncableSearchState::default(),
+        };
+
+        for i in hs.offset..data.len() {
+            let v = data[i];
+
+            if hs.state.add(data, self, i, v) {
+                return Ok(i + 1);
+            }
+        }
+
+        hs.offset = data.len();
+        Err(hs)
+    }
+
+    fn incrimental(&self) -> Self::Incr {
+        From::from(self.clone())
+    }
+}
+
 #[derive(Debug, Default, Clone)]
-struct HashState {
+struct RsyncableState {
     accum: Wrapping<u64>,
 }
 
-impl HashState {
-    fn add(&mut self, data: &[u8], parent: &Rsyncable, i: usize, v: u8) -> bool {
-        if i >= parent.window_len {
-            self.accum -= Wrapping(data[i - parent.window_len] as u64);
-        }
-        self.accum += Wrapping(v as u64);
-        (self.accum % Wrapping(parent.modulus)).0 == 0
-    }
+/// Intermediate state for [`Rsyncable::find_chunk_edge`]
+///
+/// Using this avoids re-computation of data when no edge is found
+#[derive(Debug, Default, Clone)]
+pub struct RsyncableSearchState {
+    offset: usize,
+    state: RsyncableState,
 }
 
 /// Provides an incremental interface to [`Rsyncable`]
@@ -85,6 +124,34 @@ pub struct RsyncableIncr {
     window: VecDeque<u8>,
 }
 
+impl RsyncableIncr {
+    fn reset(&mut self) {
+        self.window.clear();
+        self.accum = Wrapping(0);
+    }
+}
+
+impl From<Rsyncable> for RsyncableIncr {
+    fn from(params: Rsyncable) -> Self {
+        let window = VecDeque::with_capacity(params.window_len);
+        RsyncableIncr {
+            params,
+            accum: Wrapping(0),
+            window,
+        }
+    }
+}
+
+impl RsyncableState {
+    fn add(&mut self, data: &[u8], parent: &Rsyncable, i: usize, v: u8) -> bool {
+        if i >= parent.window_len {
+            self.accum -= Wrapping(data[i - parent.window_len] as u64);
+        }
+        self.accum += Wrapping(v as u64);
+        (self.accum % Wrapping(parent.modulus)).0 == 0
+    }
+}
+
 impl ChunkIncr for RsyncableIncr {
     fn push(&mut self, data: &[u8]) -> Option<usize> {
         for (i, &v) in data.iter().enumerate() {
@@ -96,10 +163,8 @@ impl ChunkIncr for RsyncableIncr {
             self.window.push_back(v);
 
             if (self.accum % Wrapping(self.params.modulus)).0 == 0 {
-                // split here
-                self.window.clear();
-                self.accum = Wrapping(0);
-                return Some(i);
+                self.reset();
+                return Some(i + 1);
             }
         }
 
@@ -110,7 +175,7 @@ impl ChunkIncr for RsyncableIncr {
 impl Splitter for Rsyncable {
     fn find_chunk_edge<'a, 'b>(&'a self, data: &'b [u8]) -> usize
     {
-        let mut hs = HashState::default();
+        let mut hs = RsyncableState::default();
 
         let mut l = 0;
         for (i, &v) in data.iter().enumerate() {
@@ -125,7 +190,7 @@ impl Splitter for Rsyncable {
 
     fn next_iter<'a, T: Iterator<Item=u8>>(&'a self, iter: T) -> Option<Vec<u8>>
     {
-        let mut hs = HashState::default();
+        let mut hs = RsyncableState::default();
 
         let a = self.window_len + self.window_len / 2;
         let mut data = Vec::with_capacity(a);
@@ -142,19 +207,6 @@ impl Splitter for Rsyncable {
         } else {
             Some(data)
         }
-    }
-}
-
-impl Rsyncable {
-    pub fn with_window_and_modulus(window: usize, modulus: u64) -> Rsyncable
-    {
-        Rsyncable { window_len: window, modulus }
-    }
-}
-
-impl Default for Rsyncable {
-    fn default() -> Self {
-        Self::with_window_and_modulus(8192, 4096)
     }
 }
 
