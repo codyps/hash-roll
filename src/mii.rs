@@ -40,13 +40,13 @@ impl Default for Mii {
 }
 
 impl crate::Chunk for Mii {
-    type SearchState = MiiIncr;
+    type SearchState = MiiSearchState;
     type Incr = MiiIncr;
 
     fn find_chunk_edge(&self, state: Option<Self::SearchState>, data: &[u8]) -> Result<usize, Self::SearchState> {
         let mut state = match state {
             Some(s) => s,
-            None => self.incrimental()
+            None => self.incrimental().into()
         };
 
         match state.push(data) {
@@ -60,6 +60,27 @@ impl crate::Chunk for Mii {
     }
 }
 
+#[derive(Debug)]
+pub struct MiiSearchState {
+    offset: usize,
+    incr: MiiIncr,
+}
+
+impl From<MiiIncr> for MiiSearchState {
+    fn from(incr: MiiIncr) -> Self {
+        Self {
+            offset: 0,
+            incr,
+        }
+    }
+}
+
+impl MiiSearchState {
+    fn push(&mut self, data: &[u8]) -> Option<usize> {
+        let d = &data[self.offset..];
+        self.incr.push(d)
+    }
+}
 
 #[derive(Debug)]
 pub struct MiiIncr {
@@ -84,7 +105,7 @@ impl From<Mii> for MiiIncr {
     }
 }
 
-impl crate::ChunkIncr for MiiIncr {
+impl ChunkIncr for MiiIncr {
     fn push(&mut self, input: &[u8]) -> Option<usize> {
         for (i, b) in input.iter().cloned().enumerate() {
             if b > self.prev {
@@ -93,7 +114,7 @@ impl crate::ChunkIncr for MiiIncr {
                     // this is a split
                     self.increment = 0;
                     self.prev = 0;
-                    return Some(i);
+                    return Some(i + 1);
                 }
             } else {
                 self.increment = 0;
