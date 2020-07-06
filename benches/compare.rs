@@ -1,6 +1,6 @@
 /*
  */
-use hash_roll::{Bup,Zpaq,Rsyncable,Splitter};
+use hash_roll::{Splitter, Chunk, ChunkIncr};
 use rand;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
@@ -62,12 +62,13 @@ pub fn split_histogram<F>(c: &mut Criterion, bytes: usize, name: &'static str, i
     where for<'a> F: Fn(&'a [u8]) -> Box<dyn FnMut() -> Option<u64> + 'a>
 {
     use rand::RngCore;
+    use rand::SeedableRng;
     use histogram::*;
-    let mut rng = rand::thread_rng();
+    let mut rng = rand_pcg::Pcg64::from_rng(rand::thread_rng()).unwrap();
     let mut d = vec![0u8; bytes];
+    rng.fill_bytes(&mut d);
     let mut lenghts = Histogram::new();
     c.bench_function(name, |b| b.iter(|| {
-        rng.fill_bytes(&mut d);
         let mut i = black_box(init(&d[..]));
         loop {
             match black_box(i()) {
@@ -106,7 +107,7 @@ fn bench_rsyncable_vecs (c: &mut Criterion) {
     let mut d = vec![0u8; BENCH_BYTES];
     c.bench_function("rsyncable vecs", |b| b.iter(|| {
         rng.fill_bytes(&mut d);
-        let s = Rsyncable::default().into_vecs(d.iter().cloned());
+        let s = hash_roll::rsyncable::Rsyncable::default().into_vecs(d.iter().cloned());
         for _ in s {}
     }));
 }
@@ -117,14 +118,14 @@ fn bench_rsyncable_slices (c: &mut Criterion) {
     let mut d = vec![0u8; BENCH_BYTES];
     c.bench_function("rsyncable slices", |b| b.iter(||{
         rng.fill_bytes(&mut d);
-        let s = Rsyncable::default().into_slices(&d[..]);
+        let s = hash_roll::rsyncable::Rsyncable::default().into_slices(&d[..]);
         for _ in s {}
     }));
 }
 
 fn bench_zpaq (b: &mut Criterion) {
     split_histogram(b, BENCH_BYTES, "bench_zpaq", |data| {
-        let z = Zpaq::default();
+        let z = hash_roll::zpaq::Zpaq::default();
         let mut c = &data[..];
         Box::new(move || {
             let (a, b) = z.split(c);
@@ -140,7 +141,7 @@ fn bench_zpaq (b: &mut Criterion) {
 
 fn bench_zpaq_iter_slice(b: &mut Criterion) {
     split_histogram(b, BENCH_BYTES, "zpaq_iter_slice", |data| {
-        let z = Zpaq::default();
+        let z = hash_roll::zpaq::Zpaq::default();
         let mut zi = z.into_slices(data);
         Box::new(move || {
             zi.next().map(|x| x.len() as u64)
@@ -150,7 +151,7 @@ fn bench_zpaq_iter_slice(b: &mut Criterion) {
 
 fn bench_zpaq_iter_vec(b: &mut Criterion) {
     split_histogram(b, BENCH_BYTES, "zpaq_iter_vec", |data| {
-        let z = Zpaq::default();
+        let z = hash_roll::zpaq::Zpaq::default();
         let mut zi = z.into_vecs(data.iter().cloned());
         Box::new(move || {
             zi.next().map(|x| x.len() as u64)
@@ -175,16 +176,15 @@ fn bench_rollsum_bup(b: &mut Criterion) {
 
 fn bench_bup(b: &mut Criterion) {
     split_histogram(b, BENCH_BYTES, "bup", |data| {
-        let z = Bup::default();
+        let mut z = hash_roll::bup::RollSumIncr::default();
         let mut pos = 0;
         Box::new(move || {
             let l = z.push(&data[pos..]);
-            if l == 0 {
-                None 
-            } else {
-                pos += l;
-                Some(l as u64)
+            match l {
+                Some(x) => {pos += x },
+                None => {}
             }
+            l.map(|x| x as u64)
         })
     })
 }

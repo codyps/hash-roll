@@ -101,10 +101,6 @@ pub mod gear_table;
 pub mod mii;
 pub mod ram;
 
-pub use bup::RollSumIncr as Bup;
-pub use zpaq::Zpaq;
-pub use rsyncable::Rsyncable;
-
 pub(crate) use range::RangeExt;
 
 /// Accept incrimental input and provide indexes of split points

@@ -4,7 +4,7 @@ use hash_roll::ChunkIncr;
 
 quickcheck! {
     fn simple_eq(xs: Vec<u8>) -> bool {
-        let mut m1 = hash_roll::Bup::default();
+        let mut m1 = hash_roll::bup::RollSumIncr::default();
         let mut m2 = rollsum::Bup::default();
 
         let v1 = m1.push(&xs);
@@ -14,7 +14,7 @@ quickcheck! {
     }
 
     fn iter_eq(xs: Vec<u8>) -> bool {
-        let mut m1 = hash_roll::Bup::default();
+        let mut m1 = hash_roll::bup::RollSumIncr::default();
         let mut m2 = rollsum::Bup::default();
 
         let mut x = &xs[..];
@@ -41,7 +41,7 @@ quickcheck! {
 }
 
 fn chk_a(x: &[u8]) {
-    let mut m1 = hash_roll::Bup::default();
+    let mut m1 = hash_roll::bup::RollSumIncr::default();
     let mut m2 = rollsum::Bup::default();
 
     let v1 = m1.push(&x);
