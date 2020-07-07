@@ -78,7 +78,10 @@ impl From<MiiIncr> for MiiSearchState {
 impl MiiSearchState {
     fn push(&mut self, data: &[u8]) -> Option<usize> {
         let d = &data[self.offset..];
-        self.incr.push(d)
+        assert!(data.len() >= self.offset);
+        let r = self.incr.push(d).map(|x| x + self.offset);
+        self.offset = data.len();
+        r
     }
 }
 
