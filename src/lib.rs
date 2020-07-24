@@ -194,7 +194,7 @@ impl<'a, C: ChunkIncr> Iterator for IterSlicesPartial<'a, C> {
     type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.rem.len() == 0 {
+        if self.rem.is_empty() {
             return None;
         }
 
@@ -336,14 +336,14 @@ pub trait Splitter {
     /// Create an iterator of `Vec<u8>` from an input Iterator of bytes.
     /// The splitter is consumed.
     ///
-    fn into_vecs<'a, T: Iterator<Item = u8>>(self, data: T) -> SplitterVecs<T, Self>
+    fn into_vecs<T: Iterator<Item = u8>>(self, data: T) -> SplitterVecs<T, Self>
     where
         Self: Sized,
     {
         SplitterVecs::from(self, data)
     }
 
-    fn as_vecs<'a, T: Iterator<Item = u8>>(&'a self, data: T) -> SplitterVecs<T, &Self>
+    fn as_vecs<T: Iterator<Item = u8>>(&self, data: T) -> SplitterVecs<T, &Self>
     where
         Self: Sized,
     {
