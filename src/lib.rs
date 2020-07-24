@@ -217,7 +217,7 @@ pub trait Chunk {
     /// already done.
     type SearchState;
 
-    /// `Incr` provide the incrimental interface to this chunking instance
+    /// `Incr` provides the incrimental interface to this chunking instance
     type Incr : ChunkIncr;
     
     /// Find the location in `data` to split the data
@@ -243,6 +243,9 @@ pub trait Chunk {
     // would then need to be cleared to prevent common issues with re-use (ie: we expect to see a
     // loop with a single `SearchState`, and requring explicit `reset()`ing of the `SearchState`
     // will increase error rates.
+    //
+    // Consider if result should return `(&[u8], &[u8])` instead of an index (which would then be
+    // given to `.split_at()`
     fn find_chunk_edge(&self, state: Option<Self::SearchState>, data: &[u8]) -> Result<usize, Self::SearchState>;
 
     /// `incrimental()` returns a [`ChunkIncr`] which can be incrimentally fed data and emits
