@@ -69,4 +69,17 @@ proptest! {
         let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
         assert_eq!(s1, s2);
     }
+
+    #[test]
+    fn buzhash_fce_self_consistent_with_varying_buf_size(
+        seed: u8,
+        data in prop::collection::vec(0u8..=255u8, 0..10000),
+        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
+        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
+    {
+        let chunker = hash_roll::buzhash::BuzHash::new_nom(seed);
+        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
+        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
+        assert_eq!(s1, s2);
+    }
 }
