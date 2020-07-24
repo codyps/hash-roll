@@ -1,6 +1,5 @@
 use crate::ChunkIncr;
 
-
 /// C. Zhang et al., "MII: A Novel Content Defined Chunking Algorithm for Finding Incremental Data
 /// in Data Synchronization," in IEEE Access, vol. 7, pp. 86932-86945, 2019, doi:
 /// 10.1109/ACCESS.2019.2926195.
@@ -21,12 +20,10 @@ impl Mii {
     //
     // 1: P(curr > prev) = 0    (prev set to 0xff)
     // 2: P(curr > prev) = 0.5  (prev and curr assumed to be randomly distributed)
-    // 3: P(curr > prev) |  t2 = ??? 
+    // 3: P(curr > prev) |  t2 = ???
     //    P(curr > prev) | !t2 = ???
     pub fn with_w(w: u64) -> Self {
-        Self {
-            w,
-        }
+        Self { w }
     }
 }
 
@@ -43,10 +40,14 @@ impl crate::Chunk for Mii {
     type SearchState = MiiSearchState;
     type Incr = MiiIncr;
 
-    fn find_chunk_edge(&self, state: Option<Self::SearchState>, data: &[u8]) -> Result<usize, Self::SearchState> {
+    fn find_chunk_edge(
+        &self,
+        state: Option<Self::SearchState>,
+        data: &[u8],
+    ) -> Result<usize, Self::SearchState> {
         let mut state = match state {
             Some(s) => s,
-            None => self.incrimental().into()
+            None => self.incrimental().into(),
         };
 
         match state.push(data) {
@@ -68,10 +69,7 @@ pub struct MiiSearchState {
 
 impl From<MiiIncr> for MiiSearchState {
     fn from(incr: MiiIncr) -> Self {
-        Self {
-            offset: 0,
-            incr,
-        }
+        Self { offset: 0, incr }
     }
 }
 

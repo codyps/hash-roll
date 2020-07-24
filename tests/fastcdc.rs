@@ -2,9 +2,9 @@ use hash_roll::fastcdc::FastCdcIncr;
 use hash_roll::ChunkIncr;
 use rand_pcg::Pcg64;
 
-#[derive(Debug,Clone,PartialEq,Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Vec8K {
-    data: Vec<u8>
+    data: Vec<u8>,
 }
 
 impl quickcheck::Arbitrary for Vec8K {
@@ -13,16 +13,14 @@ impl quickcheck::Arbitrary for Vec8K {
         // long to run.
         let l = 1 * 1024 + g.size();
 
-        let mut d = vec![0;l];
+        let mut d = vec![0; l];
 
         g.fill_bytes(&mut d[..]);
 
-        Vec8K {
-            data: d
-        }
+        Vec8K { data: d }
     }
 
-    fn shrink(&self) -> Box<dyn Iterator<Item=Self>> {
+    fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
         // use the normal Vec shrinkers
         let chain = self.data.shrink().map(|x| Vec8K { data: x });
         Box::new(chain)
@@ -91,7 +89,7 @@ fn feed_until_5_chunks() {
     let mut cdc = FastCdcIncr::default();
     let mut ct = 0;
     let mut rng = ::rand::thread_rng();
-    let mut d = [0u8;256];
+    let mut d = [0u8; 256];
     rng.fill_bytes(&mut d);
     loop {
         rng.fill_bytes(&mut d);
@@ -114,10 +112,9 @@ fn feed_until_5_chunks() {
 }
 
 /// A 1-buffer implimentation of FastCDC8KB designed to match the reference pseudocode
-fn fast_cdc_8kb(src: &[u8]) -> usize
-{
-    use std::num::Wrapping;
+fn fast_cdc_8kb(src: &[u8]) -> usize {
     use hash_roll::gear_table::GEAR_64;
+    use std::num::Wrapping;
     // these masks are taken from the paper and could be adjusted/adjustable.
     const MASK_S: u64 = 0x0003590703530000;
     //const MASK_A: u64 = 0x0000d90303530000;
@@ -135,7 +132,7 @@ fn fast_cdc_8kb(src: &[u8]) -> usize
         return 0;
     }
 
-    if n >= (MAX_SIZE as usize){
+    if n >= (MAX_SIZE as usize) {
         n = MAX_SIZE as usize;
     } else if n <= normal_size {
         normal_size = n;
@@ -164,4 +161,3 @@ fn fast_cdc_8kb(src: &[u8]) -> usize
         0
     }
 }
-

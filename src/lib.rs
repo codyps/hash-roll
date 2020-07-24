@@ -15,7 +15,7 @@
 //! - Configured Algorithm Instance (impliments [`Splitter`]). Normally named plainly (like
 //!   [`Bup`]). These can be thought of as "parameters" for an algorithm.
 //! - Incrimental (impliments [`ChunkIncr`]). Normally named with `Incr` suffix.
-//! 
+//!
 //! Because of the various ways one might use a CDC, and the different CDC algorithm
 //! characteristics, hash-roll provides a few ways to use them.
 //!
@@ -26,7 +26,7 @@
 //! methods to obtain other kinds of APIs, like Incrimentals.
 //!
 //! ## CDC Algorithms and Window Buffering
-//! 
+//!
 //! Different CDC algorithms have different constraints about how they process data. Notably, some
 //! require a large amount of previous processed data to process additional data. This "large
 //! amount of previously processed data" is typically referred to as the "window". That said, note
@@ -34,13 +34,13 @@
 //!
 //! For the window-buffering algorithms, their is an extra cost to certain types of API
 //! implimentations. The documentation will note when these occur and suggest alternatives.
-//! 
+//!
 //! Generally, CDC interfaces that are incrimental will be slower for window-buffering algorithms.
 //! Using an explicitly allocating interface (which emits `Vec<u8>` or `Vec<Vec<u8>>`) will have no
 //! worse performance that the incrimental API, but might be more convenient. Using an all-at-once
 //! API will provide the best performance due to not requiring any buffering (the input data can be
 //! used directly).
-//! 
+//!
 //! ## Use Cases that drive API choices
 //!
 //!  - accumulate vecs, emits vecs
@@ -53,7 +53,6 @@
 //!    - incrimenal: yes
 //!    - input: `&[u8]`
 
-
 // # API Design Notes
 //
 // ## What methods should be in a trait? What should be in wrapper structs?
@@ -64,7 +63,7 @@
 //    it's much more efficient for window-buffering algorithms to provide implimentations that know
 //    how to look into the input data directly.
 
-#![warn(rust_2018_idioms,missing_debug_implementations)]
+#![warn(rust_2018_idioms, missing_debug_implementations)]
 /* TODO: Rabin-Karp
  * H = c_1 * a ** (k-1) + c_2 * a ** (k-2) ... + c_k * a ** 0
  * where:
@@ -90,17 +89,17 @@
 use std::borrow::Borrow;
 use std::mem;
 
-pub mod range;
 pub mod bup;
-pub mod zpaq;
-pub mod rsyncable;
 pub mod buzhash;
-pub mod gear;
-pub mod fastcdc;
-pub mod gear_table;
 pub mod buzhash_table;
+pub mod fastcdc;
+pub mod gear;
+pub mod gear_table;
 pub mod mii;
 pub mod ram;
+pub mod range;
+pub mod rsyncable;
+pub mod zpaq;
 
 pub(crate) use range::RangeExt;
 
@@ -132,7 +131,9 @@ pub trait ChunkIncr {
     /// Note that this is a non-incrimental interface. Calling this on an already fed chunker or using
     /// this multiple times on the same chunker may provide unexpected results
     fn iter_slices<'a>(self, data: &'a [u8]) -> IterSlices<'a, Self>
-            where Self: std::marker::Sized {
+    where
+        Self: std::marker::Sized,
+    {
         IterSlices {
             rem: data,
             chunker: self,
@@ -160,7 +161,7 @@ impl<'a, C: ChunkIncr> IterSlices<'a, C> {
     /// Obtain the internals
     ///
     /// Useful, for example, after iteration stops to obtain the remaining slice.
-    pub fn into_parts(self) -> (C, &'a[u8]) {
+    pub fn into_parts(self) -> (C, &'a [u8]) {
         (self.chunker, self.rem)
     }
 }
@@ -202,7 +203,7 @@ impl<'a, C: ChunkIncr> Iterator for IterSlicesPartial<'a, C> {
                 let v = self.rem;
                 self.rem = &[];
                 Some(v)
-            },
+            }
             Some(l) => {
                 let (v, rn) = self.rem.split_at(l);
                 self.rem = rn;
@@ -219,8 +220,8 @@ pub trait Chunk {
     type SearchState;
 
     /// `Incr` provides the incrimental interface to this chunking instance
-    type Incr : ChunkIncr;
-    
+    type Incr: ChunkIncr;
+
     /// Find the location in `data` to split the data
     ///
     /// If no split point is found, the `SearchState` is returned. One should only use the
@@ -247,7 +248,11 @@ pub trait Chunk {
     //
     // Consider if result should return `(&[u8], &[u8])` instead of an index (which would then be
     // given to `.split_at()`
-    fn find_chunk_edge(&self, state: Option<Self::SearchState>, data: &[u8]) -> Result<usize, Self::SearchState>;
+    fn find_chunk_edge(
+        &self,
+        state: Option<Self::SearchState>,
+        data: &[u8],
+    ) -> Result<usize, Self::SearchState>;
 
     /// `incrimental()` returns a [`ChunkIncr`] which can be incrimentally fed data and emits
     /// chunks.
@@ -263,36 +268,35 @@ pub trait Chunk {
 /// `Splitter`s define how to split a stream of bytes into chunks. They are instances of CDC
 /// algorthims with their parameters.
 ///
-pub trait Splitter
-{
+pub trait Splitter {
     /// Find the location (if any) to split `data` based on this splitter.
     ///
     /// Note: this doesn't preserve any intermediate state. Having intermediate state may be useful
     /// to have if you plan on extending the input data whan a split point is not found.
-    /// 
+    ///
     /// ## For implimenting `Splitter`
-    /// 
+    ///
     /// The provided implimentation uses [`Splitter::split`](#method.split).
     /// You must impliment either this function or `split`.
     fn find_chunk_edge(&self, data: &[u8]) -> usize {
         self.split(data).0.len()
     }
 
-    /// 
+    ///
     /// Split data into 2 pieces using a given splitter.
-    /// 
+    ///
     /// It is expected that in most cases the second element of the return value will be split
     /// further by calling this function again.
     ///
     /// Note: this doesn't preserve any intermediate state. Having intermediate state may be useful
     /// to have if you plan on extending the input data whan a split point is not found.
-    /// 
+    ///
     /// *Implimentor's Note*
-    /// 
+    ///
     /// The provided implimentation uses [`find_chunk_edge`](#method.find_chunk_edge).
     /// You must impliment either this function or `find_chunk_edge`.
-    /// 
-    fn split<'b>(&self, data: &'b [u8]) -> (&'b[u8], &'b[u8]) {
+    ///
+    fn split<'b>(&self, data: &'b [u8]) -> (&'b [u8], &'b [u8]) {
         let l = self.find_chunk_edge(data);
         data.split_at(l)
     }
@@ -301,56 +305,58 @@ pub trait Splitter
     ///
     /// See the iterator generator functions [`into_vecs`](#method.into_vecs) and
     /// [`as_vecs`](#method.as_vecs) which provide a more ergonomic interface to this.
-    /// 
+    ///
     /// Note: performance of this function is _really_ bad. This iterating over bytes and copying
     /// every byte into a `Vec` is not cheap.
     ///
     /// Note: this doesn't preserve any intermediate state. Having intermediate state may be useful
     /// to have if you plan on extending the input data whan a split point is not found.
-    /// 
-    fn next_iter<T: Iterator<Item=u8>>(&self, iter: T) -> Option<Vec<u8>>;
+    ///
+    fn next_iter<T: Iterator<Item = u8>>(&self, iter: T) -> Option<Vec<u8>>;
 
     /**
      * Create an iterator over slices from a slice and a splitter.
      * The splitter is consumed.
      */
     fn into_slices<'a>(self, data: &'a [u8]) -> SplitterSlices<'a, Self>
-        where Self: Sized
+    where
+        Self: Sized,
     {
         SplitterSlices::from(self, data)
     }
 
     fn as_slices<'a>(&'a self, data: &'a [u8]) -> SplitterSlices<'a, &Self>
-        where Self: Sized
+    where
+        Self: Sized,
     {
         SplitterSlices::from(self, data)
     }
 
-    /// 
+    ///
     /// Create an iterator of `Vec<u8>` from an input Iterator of bytes.
     /// The splitter is consumed.
-    /// 
-    fn into_vecs<'a, T: Iterator<Item=u8>>(self, data: T) -> SplitterVecs<T, Self>
-        where Self: Sized
+    ///
+    fn into_vecs<'a, T: Iterator<Item = u8>>(self, data: T) -> SplitterVecs<T, Self>
+    where
+        Self: Sized,
     {
         SplitterVecs::from(self, data)
     }
 
-    fn as_vecs<'a, T: Iterator<Item=u8>>(&'a self, data: T) -> SplitterVecs<T, &Self>
-        where Self: Sized
+    fn as_vecs<'a, T: Iterator<Item = u8>>(&'a self, data: T) -> SplitterVecs<T, &Self>
+    where
+        Self: Sized,
     {
         SplitterVecs::from(self, data)
     }
 }
 
 impl<'a, S: Splitter + ?Sized> Splitter for &'a S {
-    fn split<'b>(&self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
-    {
+    fn split<'b>(&self, data: &'b [u8]) -> (&'b [u8], &'b [u8]) {
         (*self).split(data)
     }
 
-    fn next_iter<T: Iterator<Item=u8>>(&self, iter: T) -> Option<Vec<u8>>
-    {
+    fn next_iter<T: Iterator<Item = u8>>(&self, iter: T) -> Option<Vec<u8>> {
         (*self).next_iter(iter)
     }
 }
@@ -363,12 +369,8 @@ pub struct SplitterSlices<'a, T: Splitter + 'a> {
 }
 
 impl<'a, T: Splitter> SplitterSlices<'a, T> {
-    pub fn from(i: T, d : &'a [u8]) -> Self
-    {
-        SplitterSlices {
-            parent: i,
-            d,
-        }
+    pub fn from(i: T, d: &'a [u8]) -> Self {
+        SplitterSlices { parent: i, d }
     }
 }
 
@@ -393,8 +395,7 @@ impl<'a, T: Splitter> Iterator for SplitterSlices<'a, T> {
     }
 
     #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>)
-    {
+    fn size_hint(&self) -> (usize, Option<usize>) {
         /* At most, we'll end up returning a slice for every byte, +1 empty slice */
         if self.d.is_empty() {
             (0, Some(0))
@@ -412,16 +413,12 @@ pub struct SplitterVecs<T, P: Splitter> {
 }
 
 impl<T, P: Splitter> SplitterVecs<T, P> {
-    pub fn from(i: P, d: T) -> Self
-    {
-        SplitterVecs {
-            parent: i,
-            d,
-        }
+    pub fn from(i: P, d: T) -> Self {
+        SplitterVecs { parent: i, d }
     }
 }
 
-impl<T: Iterator<Item=u8>, P: Splitter> Iterator for SplitterVecs<T, P> {
+impl<T: Iterator<Item = u8>, P: Splitter> Iterator for SplitterVecs<T, P> {
     type Item = Vec<u8>;
 
     #[inline]
@@ -430,8 +427,7 @@ impl<T: Iterator<Item=u8>, P: Splitter> Iterator for SplitterVecs<T, P> {
     }
 
     #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>)
-    {
+    fn size_hint(&self) -> (usize, Option<usize>) {
         /* At most, we'll end up returning a vec for every byte, +1 empty slice */
         let (a, b) = self.d.size_hint();
         (a, if let Some(c) = b { Some(c + 1) } else { None })

@@ -2,25 +2,38 @@ use std::ops::Bound::{self, *};
 
 pub trait RangeExt<T> {
     fn exceeds_max(&self, other: &T) -> bool
-        where T: PartialOrd<T>;
+    where
+        T: PartialOrd<T>;
 
     fn under_min(&self, item: &T) -> bool
-        where T: PartialOrd<T>;
+    where
+        T: PartialOrd<T>;
 
     fn contains(&self, item: &T) -> bool
-        where T: PartialOrd<T>;
+    where
+        T: PartialOrd<T>;
 
     fn into_tuple(self) -> (std::ops::Bound<T>, std::ops::Bound<T>)
-        where T: Copy + std::marker::Sized;
+    where
+        T: Copy + std::marker::Sized;
 }
 
 impl<T, R: std::ops::RangeBounds<T>> RangeExt<T> for R {
     fn exceeds_max(&self, item: &T) -> bool
-        where T: PartialOrd<T>
+    where
+        T: PartialOrd<T>,
     {
         match self.end_bound() {
-            Included(ref i) => if item > i { return true; },
-            Excluded(ref i) => if item >= i { return true; },
+            Included(ref i) => {
+                if item > i {
+                    return true;
+                }
+            }
+            Excluded(ref i) => {
+                if item >= i {
+                    return true;
+                }
+            }
             Unbounded => {}
         }
 
@@ -28,11 +41,20 @@ impl<T, R: std::ops::RangeBounds<T>> RangeExt<T> for R {
     }
 
     fn under_min(&self, item: &T) -> bool
-        where T: PartialOrd<T>
+    where
+        T: PartialOrd<T>,
     {
         match self.start_bound() {
-            Included(ref i) => if item < i { return true; },
-            Excluded(ref i) => if item <= i { return true; },
+            Included(ref i) => {
+                if item < i {
+                    return true;
+                }
+            }
+            Excluded(ref i) => {
+                if item <= i {
+                    return true;
+                }
+            }
             Unbounded => {}
         }
 
@@ -40,7 +62,8 @@ impl<T, R: std::ops::RangeBounds<T>> RangeExt<T> for R {
     }
 
     fn contains(&self, item: &T) -> bool
-        where T: PartialOrd<T>
+    where
+        T: PartialOrd<T>,
     {
         /* not excluded by lower */
         if self.under_min(item) {
@@ -55,8 +78,13 @@ impl<T, R: std::ops::RangeBounds<T>> RangeExt<T> for R {
     }
 
     fn into_tuple(self) -> (std::ops::Bound<T>, std::ops::Bound<T>)
-            where T: Copy + std::marker::Sized {
-        (bound_cloned(self.start_bound()), bound_cloned(self.end_bound()))
+    where
+        T: Copy + std::marker::Sized,
+    {
+        (
+            bound_cloned(self.start_bound()),
+            bound_cloned(self.end_bound()),
+        )
     }
 }
 

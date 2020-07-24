@@ -45,7 +45,7 @@ impl quickcheck::Arbitrary for Fma {
     }
 
     fn shrink(&self) -> Box<Iterator<Item=Self>> {
-        
+
     }
 }
 */
@@ -97,7 +97,7 @@ quickcheck! {
             if f >= offs + size {
                 return false;
             }
-            
+
             if f > size && (&data[(f-size)..f] == ms) {
                 return true;
             }

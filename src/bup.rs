@@ -1,6 +1,6 @@
-use std::num::Wrapping;
 use super::ChunkIncr;
 use std::fmt;
+use std::num::Wrapping;
 
 const BLOBBITS: u8 = 13;
 const BLOBSIZE: u32 = 1 << (BLOBBITS as u32);
@@ -27,7 +27,7 @@ impl RollSum {
         let ws = Wrapping(window_size as u32);
         Self {
             s1: ws * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
-            s2: ws * (ws-Wrapping(1)) * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
+            s2: ws * (ws - Wrapping(1)) * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
             window_len: window_size as usize,
         }
     }
@@ -63,8 +63,7 @@ impl Default for RollSumIncr {
 }
 
 impl fmt::Debug for RollSumIncr {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> Result<(), ::std::fmt::Error>
-    {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> Result<(), ::std::fmt::Error> {
         f.debug_struct("RollSumIncr")
             .field("s1", &self.s1)
             .field("s2", &self.s2)
@@ -85,18 +84,15 @@ impl Clone for RollSumIncr {
 
 impl PartialEq for RollSumIncr {
     fn eq(&self, other: &Self) -> bool {
-        self.s1 == other.s1 &&
-            self.s2 == other.s2 &&
-            self.wofs == other.wofs &&
-            {
-                for i in 0..self.window.len() {
-                    if self.window[i] != other.window[i] {
-                        return false;
-                    }
+        self.s1 == other.s1 && self.s2 == other.s2 && self.wofs == other.wofs && {
+            for i in 0..self.window.len() {
+                if self.window[i] != other.window[i] {
+                    return false;
                 }
-
-                true
             }
+
+            true
+        }
     }
 }
 
@@ -107,7 +103,7 @@ impl From<RollSum> for RollSumIncr {
         Self {
             s1: params.s1,
             s2: params.s2,
-            window: vec![0;params.window_len].into_boxed_slice(),
+            window: vec![0; params.window_len].into_boxed_slice(),
             wofs: Wrapping(0),
         }
     }
@@ -140,23 +136,22 @@ impl RollSumIncr {
     }
 
     pub fn sum(data: &[u8]) -> u32 {
-        let mut x = Self::default(); 
+        let mut x = Self::default();
         x.roll(data);
         x.digest()
     }
 
     pub fn at_split(&self) -> bool {
-        (self.digest() & (BLOBSIZE-1)) == (BLOBSIZE-1)
+        (self.digest() & (BLOBSIZE - 1)) == (BLOBSIZE - 1)
     }
 }
 
 impl ChunkIncr for RollSumIncr {
-    fn push(&mut self, data: &[u8]) -> Option<usize>
-    {
+    fn push(&mut self, data: &[u8]) -> Option<usize> {
         for (i, &v) in data.iter().enumerate() {
             self.roll_byte(v);
             if self.at_split() {
-                return Some(i+1);
+                return Some(i + 1);
             }
         }
 
@@ -167,8 +162,8 @@ impl ChunkIncr for RollSumIncr {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rollsum::Engine;
     use rand::RngCore;
+    use rollsum::Engine;
 
     #[test]
     fn rs() {
@@ -186,16 +181,16 @@ mod test {
 
         m1.roll_byte(4);
         m2.roll_byte(4);
-        
+
         assert_eq!(m1.digest(), m2.digest());
 
         m1.roll_byte(18);
         m2.roll_byte(18);
-        
+
         assert_eq!(m1.digest(), m2.digest());
 
         let mut r = rand::thread_rng();
-        let mut b = [0u8;2048];
+        let mut b = [0u8; 2048];
 
         r.fill_bytes(&mut b);
 
@@ -205,7 +200,6 @@ mod test {
             println!("i={}, v={}", i, v);
             assert_eq!(m1.digest(), m2.digest());
         }
-
 
         m1.roll(&b);
         m2.roll(&b);
@@ -220,7 +214,7 @@ mod test {
         let mut m2 = rollsum::Bup::default();
 
         let mut r = rand::thread_rng();
-        let mut b = [0u8;2048];
+        let mut b = [0u8; 2048];
 
         r.fill_bytes(&mut b);
 
@@ -232,10 +226,10 @@ mod test {
 
             match v1 {
                 None => break,
-                Some(v) => { x = &x[v..]; }
+                Some(v) => {
+                    x = &x[v..];
+                }
             }
         }
     }
 }
-
-

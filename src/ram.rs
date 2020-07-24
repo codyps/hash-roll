@@ -1,5 +1,5 @@
 /// Rapid Asymmetric Maximum (RAM) is a fast chunking algorithm
-/// 
+///
 /// - Has a minimum block size (it's "window" size)
 /// - Does not provide an upper bound on block size (though paper discusses a RAML variant that
 ///   does).
@@ -15,7 +15,7 @@ pub struct Ram {
     /// global index (number of processed bytes since split)
     i: u64,
 
-    /// 
+    ///
     max_val: u8,
 }
 
@@ -23,7 +23,7 @@ impl Ram {
     /// Construct a RAM instance with window size `w`
     ///
     /// `w` is also the minimum block size
-    pub fn with_w(w: u64) -> Self  {
+    pub fn with_w(w: u64) -> Self {
         Self {
             w,
             max_val: 0,
@@ -31,7 +31,7 @@ impl Ram {
         }
     }
 
-    pub fn feed(&mut self, input: &[u8])  -> Option<usize> {
+    pub fn feed(&mut self, input: &[u8]) -> Option<usize> {
         let i = self.i;
 
         for (l_i, b) in input.iter().cloned().enumerate() {
@@ -43,7 +43,7 @@ impl Ram {
                     self.max_val = 0;
                     return Some(l_i);
                 }
-                
+
                 self.max_val = b;
             }
         }

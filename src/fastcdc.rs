@@ -1,6 +1,6 @@
+use super::ChunkIncr;
 use std::fmt;
 use std::num::Wrapping;
-use super::ChunkIncr;
 
 // these masks are taken from the paper and could be adjusted/adjustable.
 const MASK_S: u64 = 0x0003590703530000;
@@ -19,7 +19,7 @@ const MASK_L: u64 = 0x0000d90003530000;
 ///  - https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf
 #[derive(Clone, Copy)]
 pub struct FastCdc<'a> {
-    gear: &'a [u64;256],
+    gear: &'a [u64; 256],
     min_size: u64,
     max_size: u64,
     normal_size: u64,
@@ -27,9 +27,10 @@ pub struct FastCdc<'a> {
 
 impl<'a> PartialEq for FastCdc<'a> {
     fn eq(&self, other: &Self) -> bool {
-        self.min_size == other.min_size &&
-            self.max_size == other.max_size &&
-            self.normal_size == other.normal_size && {
+        self.min_size == other.min_size
+            && self.max_size == other.max_size
+            && self.normal_size == other.normal_size
+            && {
                 for i in 0..self.gear.len() {
                     if self.gear[i] != other.gear[i] {
                         return false;
@@ -46,8 +47,8 @@ impl<'a> Eq for FastCdc<'a> {}
 impl<'a> Default for FastCdc<'a> {
     fn default() -> Self {
         FastCdc {
-            min_size: 2 * 1024, // 2 KiB
-            max_size: 64 * 1024, // 64 KiB
+            min_size: 2 * 1024,    // 2 KiB
+            max_size: 64 * 1024,   // 64 KiB
             normal_size: 8 * 1024, // 8 KiB
             gear: &super::gear_table::GEAR_64,
         }
@@ -55,8 +56,7 @@ impl<'a> Default for FastCdc<'a> {
 }
 
 impl<'a> fmt::Debug for FastCdc<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-    {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FastCdc")
             .field("gear", &"[...]")
             .field("min_size", &self.min_size)
@@ -68,12 +68,12 @@ impl<'a> fmt::Debug for FastCdc<'a> {
 
 impl<'a> FastCdc<'a> {
     /// Create a custom FastCDC instance
-    pub fn new(gear: &'a [u64;256], min_size: u64, normal_size: u64, max_size: u64) -> Self {
+    pub fn new(gear: &'a [u64; 256], min_size: u64, normal_size: u64, max_size: u64) -> Self {
         Self {
             gear,
             min_size,
             max_size,
-            normal_size
+            normal_size,
         }
     }
 }
@@ -106,8 +106,7 @@ impl<'a> FastCdcIncr<'a> {
         }
     }
 
-    fn reset(&mut self)
-    {
+    fn reset(&mut self) {
         self.l = 0;
         self.fp = Wrapping(0);
     }
@@ -155,7 +154,7 @@ impl<'a> ChunkIncr for FastCdcIncr<'a> {
             }
 
             gi += 1;
-            i  += 1;
+            i += 1;
         }
 
         loop {
@@ -186,4 +185,3 @@ impl<'a> ChunkIncr for FastCdcIncr<'a> {
         None
     }
 }
-

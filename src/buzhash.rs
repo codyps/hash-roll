@@ -1,6 +1,6 @@
-use std::num::Wrapping;
-use std::fmt;
 use crate::{Chunk, ChunkIncr};
+use std::fmt;
+use std::num::Wrapping;
 /* Cyclic polynomial (buzhash)
  *
  * H = s ** (k -1) (h(c_1)) ^ s**(k-2)(h(c_2)) ^ ... ^ s(h(c_(k-1))) ^ h(c_k)
@@ -29,13 +29,13 @@ use crate::{Chunk, ChunkIncr};
 ///
 /// Provides parameterization over the window size (`k`), hash function (`h`), chunk edge mask, and
 /// max chunk size.
-/// 
+///
 /// Uses fixed 32-bit width for the hash.
 ///
 /// The trait [`BuzHashHash`] provides the internal hash function, see the implimentations of it
 /// for built-in hash options (which include both `Borg` and `silvasur/buzhash`'s internal hash
 /// tables).
-/// 
+///
 /// Note that it's helpful for `k` to be prime to prevent repeating strings form resulting
 /// in total cancelation of the internal hash, which can cause overly long chunks.
 ///
@@ -52,7 +52,7 @@ use crate::{Chunk, ChunkIncr};
 ///
 /// [`BuzHash`] requires storing bytes equal to it's window size (`k`). Because of this,
 /// [`BuzHashIncr`] may have poor performance compared to [`BuzHash::find_chunk_edge()`].
-#[derive(Debug,Clone,PartialEq,Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuzHash<H: BuzHashHash> {
     /// number of characters to consider at once
     k: usize,
@@ -81,7 +81,7 @@ impl<H: BuzHashHash> BuzHash<H> {
             k: capacity,
             h: hash,
             mask,
-            max_chunk_size
+            max_chunk_size,
         }
     }
 
@@ -99,9 +99,9 @@ impl<'a> BuzHash<BuzHashTableByteSaltHash<'a>> {
     pub fn new_nom(salt: u8) -> Self {
         BuzHash::new(
             67,
-            (1<<12u32) - 1,
+            (1 << 12u32) - 1,
             BuzHashTableByteSaltHash::from((salt, &crate::buzhash_table::GO_BUZHASH)),
-            1 << 24
+            1 << 24,
         )
     }
 }
@@ -110,7 +110,11 @@ impl<H: BuzHashHash + Clone> Chunk for BuzHash<H> {
     type SearchState = BuzHashSearchState;
     type Incr = BuzHashIncr<H>;
 
-    fn find_chunk_edge(&self, state: Option<Self::SearchState>, data: &[u8]) -> Result<usize, Self::SearchState> {
+    fn find_chunk_edge(
+        &self,
+        state: Option<Self::SearchState>,
+        data: &[u8],
+    ) -> Result<usize, Self::SearchState> {
         let mut hs = match state {
             Some(v) => v,
             None => Self::SearchState::default(),
@@ -137,13 +141,13 @@ impl<H: BuzHashHash + Clone> Chunk for BuzHash<H> {
     }
 }
 
-#[derive(Debug,Clone,PartialEq,Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BuzHashSearchState {
     offset: usize,
     state: BuzHashState,
 }
 
-#[derive(Debug,Clone,PartialEq,Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct BuzHashState {
     /// current value of the hash.
     h: u32,
@@ -184,7 +188,7 @@ impl BuzHashState {
 ///
 /// Note that this will be less efficient than using [`BuzHash`] on a slice directly,
 /// but may be more convenient.
-#[derive(Debug,Clone,PartialEq,Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuzHashIncr<H: BuzHashHash> {
     params: BuzHash<H>,
     state: BuzHashState,
@@ -203,12 +207,12 @@ impl<H: BuzHashHash> ChunkIncr for BuzHashIncr<H> {
             self.push_byte(v);
             if (self.state.h & self.params.mask) == self.params.mask {
                 self.reset();
-                return Some(i+1);
+                return Some(i + 1);
             }
 
             if self.input_idx > self.params.max_chunk_size {
                 self.reset();
-                return Some(i+1);
+                return Some(i + 1);
             }
         }
 
@@ -241,7 +245,7 @@ impl<H: BuzHashHash> BuzHashIncr<H> {
 
 impl<H: BuzHashHash> From<BuzHash<H>> for BuzHashIncr<H> {
     fn from(params: BuzHash<H>) -> Self {
-        let buf = vec![0;params.k].into_boxed_slice();
+        let buf = vec![0; params.k].into_boxed_slice();
         Self {
             params,
             state: Default::default(),
@@ -260,21 +264,18 @@ pub trait BuzHashHash {
 /// Use a referenced table to preform the `BuzHashHash` internal hashing
 #[derive(Clone)]
 pub struct BuzHashTableHash<'a> {
-    table: &'a [u32;256],
+    table: &'a [u32; 256],
 }
 
 impl<'a> fmt::Debug for BuzHashTableHash<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.debug_struct("BuzHashTableHash")
-            .finish()
+        fmt.debug_struct("BuzHashTableHash").finish()
     }
 }
 
-impl<'a> From<&'a [u32;256]> for BuzHashTableHash<'a> {
-    fn from(table: &'a [u32;256]) -> Self {
-        Self {
-            table
-        }
+impl<'a> From<&'a [u32; 256]> for BuzHashTableHash<'a> {
+    fn from(table: &'a [u32; 256]) -> Self {
+        Self { table }
     }
 }
 
@@ -287,22 +288,18 @@ impl<'a> BuzHashHash for BuzHashTableHash<'a> {
 /// Use a owned table to perform the `BuzHashHash` internal hashing
 #[derive(Clone)]
 pub struct BuzHashTableBufHash {
-    table: Box<[u32;256]>,
+    table: Box<[u32; 256]>,
 }
 
 impl fmt::Debug for BuzHashTableBufHash {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.debug_struct("BuzHashTableBufHash")
-            .finish()
+        fmt.debug_struct("BuzHashTableBufHash").finish()
     }
 }
 
-
-impl<'a> From<Box<[u32;256]>> for BuzHashTableBufHash {
-    fn from(table: Box<[u32;256]>) -> Self {
-        Self {
-            table
-        }
+impl<'a> From<Box<[u32; 256]>> for BuzHashTableBufHash {
+    fn from(table: Box<[u32; 256]>) -> Self {
+        Self { table }
     }
 }
 
@@ -317,19 +314,18 @@ impl BuzHashHash for BuzHashTableBufHash {
 /// Used by attic-labs/nom
 #[derive(Clone)]
 pub struct BuzHashTableByteSaltHash<'a> {
-    table: &'a [u32;256],
+    table: &'a [u32; 256],
     salt: u8,
 }
 
 impl<'a> fmt::Debug for BuzHashTableByteSaltHash<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.debug_struct("BuzHashTableByteSaltHash")
-            .finish()
+        fmt.debug_struct("BuzHashTableByteSaltHash").finish()
     }
 }
 
-impl<'a> From<(u8, &'a [u32;256])> for BuzHashTableByteSaltHash<'a> {
-    fn from((salt, table): (u8, &'a [u32;256])) -> Self {
+impl<'a> From<(u8, &'a [u32; 256])> for BuzHashTableByteSaltHash<'a> {
+    fn from((salt, table): (u8, &'a [u32; 256])) -> Self {
         Self { table, salt }
     }
 }

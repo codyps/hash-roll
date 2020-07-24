@@ -29,7 +29,7 @@ fn splits_fce<C: Chunk>(chunker: &C, mut buf: &[u8], buf_sizes: &[usize]) -> Vec
                 buf = &buf[split_point..];
                 ss = None;
                 prev_buf_size = 0;
-            },
+            }
             Err(nss) => {
                 // at end of buffer without a split point
                 if buf_size == buf.len() {

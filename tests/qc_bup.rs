@@ -47,14 +47,14 @@ fn chk_a(x: &[u8]) {
     let v1 = m1.push(&x);
     let v2 = m2.find_chunk_edge(&x);
 
-    assert_eq!(v1,v2);
+    assert_eq!(v1, v2);
 }
 
 fn chk_b(x: &[u8]) {
     use rollsum::Engine;
     let mut m1 = hash_roll::bup::RollSumIncr::default();
     let mut m2 = rollsum::Bup::default();
-    let cm = (1<<rollsum::bup::CHUNK_BITS) - 1;
+    let cm = (1 << rollsum::bup::CHUNK_BITS) - 1;
 
     for (i, &v) in x.iter().enumerate() {
         m1.roll_byte(v);
@@ -65,15 +65,20 @@ fn chk_b(x: &[u8]) {
     }
 }
 
-
 #[test]
 fn simple_eq_1() {
-    chk_a(&[92, 6, 28, 35, 68, 82, 35, 71, 34, 19, 9, 45, 97, 17, 11, 6, 53, 39, 93, 49, 29, 17, 37, 6, 39]);
+    chk_a(&[
+        92, 6, 28, 35, 68, 82, 35, 71, 34, 19, 9, 45, 97, 17, 11, 6, 53, 39, 93, 49, 29, 17, 37, 6,
+        39,
+    ]);
 }
 
 #[test]
 fn simple_eq_1b() {
-    chk_b(&[92, 6, 28, 35, 68, 82, 35, 71, 34, 19, 9, 45, 97, 17, 11, 6, 53, 39, 93, 49, 29, 17, 37, 6, 39]);
+    chk_b(&[
+        92, 6, 28, 35, 68, 82, 35, 71, 34, 19, 9, 45, 97, 17, 11, 6, 53, 39, 93, 49, 29, 17, 37, 6,
+        39,
+    ]);
 }
 
 #[test]
@@ -83,5 +88,7 @@ fn simple_eq_2() {
 
 #[test]
 fn simple_eq_3() {
-    chk_a(&[40, 58, 57, 0, 16, 2, 32, 88, 0, 22, 23, 74, 90, 88, 95, 99, 86]);
+    chk_a(&[
+        40, 58, 57, 0, 16, 2, 32, 88, 0, 22, 23, 74, 90, 88, 95, 99, 86,
+    ]);
 }
