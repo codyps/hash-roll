@@ -1,7 +1,7 @@
 /*
  */
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use hash_roll::{Chunk, ChunkIncr, Splitter};
+use hash_roll::{ChunkIncr, Splitter};
 use rand;
 
 /*
