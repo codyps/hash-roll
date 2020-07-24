@@ -74,7 +74,7 @@ impl Chunk for Rsyncable {
     fn find_chunk_edge(&self, state: Option<Self::SearchState>, data: &[u8]) -> Result<usize, Self::SearchState> {
         let mut hs = match state {
             Some(v) => v,
-            None => RsyncableSearchState::default(),
+            None => Self::SearchState::default(),
         };
 
         for i in hs.offset..data.len() {
