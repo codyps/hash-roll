@@ -12,6 +12,9 @@ const ROLLSUM_CHAR_OFFSET: usize = 31;
 
 /// Rolling sum used by [`Bup`] for splitting
 ///
+/// - https://github.com/bup/bup/blob/0ab7c3a958729b4723e6fe254da771aff608c2bf/lib/bup/bupsplit.c
+/// - https://github.com/bup/bup/blob/0ab7c3a958729b4723e6fe254da771aff608c2bf/lib/bup/bupsplit.h
+///
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RollSum {
     s1: Wrapping<u32>,
