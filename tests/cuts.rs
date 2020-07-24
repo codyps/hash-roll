@@ -81,3 +81,12 @@ fn rsyncable_cuts_2() {
         &[9277, 2758, 3074, 7415, 3579, 4141],
     )
 }
+
+#[test]
+fn buzhash_cuts_1() {
+    cut_test(0,
+        hash_roll::buzhash::BuzHash::new_nom(0),
+        &[7839, 1342, 9741, 2703, 875, 3549],
+    )
+
+}

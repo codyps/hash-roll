@@ -98,6 +98,7 @@ pub mod buzhash;
 pub mod gear;
 pub mod fastcdc;
 pub mod gear_table;
+pub mod buzhash_table;
 pub mod mii;
 pub mod ram;
 
