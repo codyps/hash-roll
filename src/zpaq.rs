@@ -1,7 +1,8 @@
 use std::fmt;
 use std::num::Wrapping;
+use std::convert::TryInto;
 
-use crate::{RangeExt, Splitter};
+use crate::{Chunk, ChunkIncr, RangeExt, Splitter};
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
@@ -43,21 +44,20 @@ use std::ops::RangeBounds;
  */
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Zpaq {
-    /* FIXME: layout optimization? Is that even needed in rust? */
-    range: (Bound<usize>, Bound<usize>),
+    range: (Bound<u64>, Bound<u64>),
     fragment: u8,
     max_hash: u32,
 }
 
 impl Zpaq {
     /* this is taken from go-dedup */
-    fn fragment_ave_from_max(max: usize) -> u8 {
+    fn fragment_ave_from_max(max: u64) -> u8 {
         /* TODO: convert this to pure integer math */
         (max as f64 / (64f64 * 64f64)).log2() as u8
     }
 
     /* these are based on the zpaq (not go-dedup) calculations */
-    fn fragment_ave_from_range<T: RangeBounds<usize>>(range: T) -> u8 {
+    fn fragment_ave_from_range<T: RangeBounds<u64>>(range: T) -> u8 {
         let v = match range.end_bound() {
             Bound::Included(i) => *i,
             Bound::Excluded(i) => *i - 1,
@@ -78,12 +78,12 @@ impl Zpaq {
     }
 
     /* these are based on the zpaq (not go-dedup) calculations */
-    fn range_from_fragment_ave(fragment_ave: u8) -> impl RangeBounds<usize> {
+    fn range_from_fragment_ave(fragment_ave: u8) -> impl RangeBounds<u64> {
         assert!(fragment_ave <= 22);
         64 << fragment_ave..8128 << fragment_ave
     }
 
-    fn range_from_max(max: usize) -> impl RangeBounds<usize> {
+    fn range_from_max(max: u64) -> impl RangeBounds<u64> {
         max / 64..max
     }
 
@@ -103,7 +103,7 @@ impl Zpaq {
      * The average block size will be the max block size (if any) divided by 4, using the same
      * algorithm to calculate it as go-dedup.
      */
-    pub fn with_range(range: impl RangeBounds<usize> + Clone) -> Self {
+    pub fn with_range(range: impl RangeBounds<u64> + Clone) -> Self {
         let f = Self::fragment_ave_from_range(range.clone());
         Self::with_average_and_range(f, range)
     }
@@ -123,7 +123,7 @@ impl Zpaq {
      * The average block size will be the max block size (if any) divided by 4, using the same
      * algorithm to calculate it as go-dedup.
      */
-    pub fn with_max_size(max: usize) -> Self {
+    pub fn with_max_size(max: u64) -> Self {
         Self::with_average_and_range(Self::fragment_ave_from_max(max), Self::range_from_max(max))
     }
 
@@ -132,7 +132,7 @@ impl Zpaq {
      *
      * All the other constructors use this internally
      */
-    pub fn with_average_and_range(average_size_base_2: u8, range: impl RangeBounds<usize>) -> Self {
+    pub fn with_average_and_range(average_size_base_2: u8, range: impl RangeBounds<u64>) -> Self {
         Zpaq {
             range: range.into_tuple(),
             fragment: average_size_base_2,
@@ -140,12 +140,12 @@ impl Zpaq {
         }
     }
 
-    fn average_block_size(&self) -> usize {
+    fn average_block_size(&self) -> u64 {
         /* I don't know If i really trust this, do some more confirmation */
         1024 << self.fragment
     }
 
-    fn split_here(&self, hash: u32, index: usize) -> bool {
+    fn split_here(&self, hash: u32, index: u64) -> bool {
         (hash < self.max_hash && !self.range.under_min(&index)) || self.range.exceeds_max(&index)
     }
 }
@@ -161,12 +161,98 @@ impl Default for Zpaq {
     }
 }
 
+#[derive(Debug)]
+pub struct ZpaqIncr {
+    params: Zpaq,
+    state: ZpaqHash,
+    idx: u64,
+}
+
+#[derive(Default, Debug)]
+pub struct ZpaqSearchState {
+    state: ZpaqHash,
+    offset: usize,
+}
+
+impl ZpaqSearchState {
+    fn feed(&mut self, v: u8) -> u32 {
+        self.offset += 1;
+        self.state.feed(v)
+    }
+}
+
+impl Chunk for Zpaq {
+    type SearchState = ZpaqSearchState;
+    type Incr = ZpaqIncr;
+
+    fn find_chunk_edge(
+        &self,
+        state: Option<Self::SearchState>,
+        data: &[u8],
+    ) -> Result<usize, Self::SearchState> {
+        let mut hs = match state {
+            Some(v) => v,
+            None => Self::SearchState::default(),
+        };
+
+        for i in hs.offset..data.len() {
+            let h = hs.feed(data[i]);
+            if self.split_here(h, (i + 1) as u64) {
+                return Ok(i + 1);
+            }
+        }
+
+        hs.offset = data.len();
+        Err(hs)
+    }
+
+    fn incrimental(&self) -> Self::Incr {
+        From::from(self.clone())
+    }
+}
+
+impl ZpaqIncr {
+    fn feed(&mut self, v: u8) -> u32 {
+        self.idx += 1;
+        self.state.feed(v) 
+    }
+
+    fn reset(&mut self) {
+        self.idx = 0;
+        self.state = Default::default();
+    }
+}
+
+impl ChunkIncr for ZpaqIncr {
+    fn push(&mut self, data: &[u8]) -> Option<usize> {
+        for (i, &v) in data.iter().enumerate() {
+            let h = self.feed(v);
+            if self.params.split_here(h, self.idx) {
+                self.reset();
+                return Some(i + 1);
+            }
+        }
+
+        None
+    }
+}
+
+impl From<Zpaq> for ZpaqIncr {
+    fn from(params: Zpaq) -> Self {
+        Self {
+            params,
+            state: Default::default(),
+            idx: 0,
+        }
+    }
+}
+
 impl Splitter for Zpaq {
     fn find_chunk_edge<'b>(&self, data: &'b [u8]) -> usize {
         let mut s = ZpaqHash::default();
         let mut l = 0;
         for (i, &v) in data.iter().enumerate() {
-            if self.split_here(s.feed(v), i + 1) {
+            if self.split_here(s.feed(v), (i + 1) as u64) {
                 l = i + 1;
                 break;
             }
@@ -183,11 +269,11 @@ impl Splitter for Zpaq {
          * prediction here. That said, even with additional data, this is a trade off with extra
          * space consumed vs number of allocations/reallocations
          */
-        let mut w = Vec::with_capacity(a + a / 2);
+        let mut w = Vec::with_capacity((a + a / 2).try_into().unwrap());
         let mut s = ZpaqHash::default();
         for v in iter {
             w.push(v);
-            if self.split_here(s.feed(v), w.len()) {
+            if self.split_here(s.feed(v), w.len() as u64) {
                 return Some(w);
             }
         }
@@ -203,28 +289,17 @@ impl Splitter for Zpaq {
 /**
  * The rolling hash component of the zpaq splitter
  */
+#[derive(Clone)]
 pub struct ZpaqHash {
     hash: Wrapping<u32>,
     last_byte: u8,
     predicted_byte: [u8; 256],
 }
 
-impl Clone for ZpaqHash {
-    fn clone(&self) -> Self {
-        ZpaqHash { ..*self }
-    }
-}
-
 impl PartialEq for ZpaqHash {
     fn eq(&self, other: &Self) -> bool {
-        self.hash == other.hash && self.last_byte == other.last_byte && {
-            for i in 0..256 {
-                if self.predicted_byte[i] != other.predicted_byte[i] {
-                    return false;
-                }
-            }
-            true
-        }
+        self.hash == other.hash && self.last_byte == other.last_byte &&
+            &self.predicted_byte[..] == &other.predicted_byte[..]
     }
 }
 
@@ -256,7 +331,7 @@ impl ZpaqHash {
      * splitting decision, it only examines it's state + current value (and the state is
      * relatively large, but isn't a window into past data).
      */
-    pub fn feed(&mut self, c: u8) -> u32 {
+    fn feed(&mut self, c: u8) -> u32 {
         self.hash = if c == self.predicted_byte[self.last_byte as usize] {
             (self.hash + Wrapping(c as u32) + Wrapping(1)) * Wrapping(314159265)
         } else {

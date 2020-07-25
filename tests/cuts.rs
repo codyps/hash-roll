@@ -97,3 +97,12 @@ fn buzhash_cuts_1() {
         &[7839, 1342, 9741, 2703, 875, 3549],
     )
 }
+
+#[test]
+fn zpaq_cuts_1() {
+    cut_test(
+        3,
+        hash_roll::zpaq::Zpaq::with_average_size(3),
+        &[16353, 2334, 970, 5326, 1557],
+    )
+}
