@@ -30,15 +30,7 @@ impl<'a> PartialEq for FastCdc<'a> {
         self.min_size == other.min_size
             && self.max_size == other.max_size
             && self.normal_size == other.normal_size
-            && {
-                for i in 0..self.gear.len() {
-                    if self.gear[i] != other.gear[i] {
-                        return false;
-                    }
-                }
-
-                true
-            }
+            && &self.gear[..] == &other.gear[..]
     }
 }
 
