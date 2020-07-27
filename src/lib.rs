@@ -98,7 +98,9 @@ pub mod gear_table;
 pub mod mii;
 pub mod ram;
 pub mod range;
-pub mod rsyncable;
+pub mod gzip;
+pub mod pigz;
+pub mod zstd;
 pub mod zpaq;
 
 pub(crate) use range::RangeExt;

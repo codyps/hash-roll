@@ -47,12 +47,12 @@ fn splits_fce<C: Chunk>(chunker: &C, mut buf: &[u8], buf_sizes: &[usize]) -> Vec
 
 proptest! {
     #[test]
-    fn rsyncable_fce_self_consistent_with_varying_buf_size(
+    fn gzip_fce_self_consistent_with_varying_buf_size(
         data in prop::collection::vec(0u8..=255u8, 0..10000),
         buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
         buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
     {
-        let chunker = hash_roll::rsyncable::Rsyncable::default();
+        let chunker = hash_roll::gzip::Rsyncable::default();
         let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
         let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
         assert_eq!(s1, s2);
@@ -89,9 +89,22 @@ proptest! {
         buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
         buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
     {
-        let chunker = hash_roll::zpaq::Zpaq::with_average_size(3);
+        let chunker = hash_roll::zpaq::Zpaq::with_average_size_pow_2(3);
         let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
         let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
         assert_eq!(s1, s2);
     }
+
+    #[test]
+    fn pigz_fce_self_consistent_with_varying_buf_size(
+        data in prop::collection::vec(0u8..=255u8, 0..10000),
+        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
+        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
+    {
+        let chunker = hash_roll::pigz::PigzRsyncable::default();
+        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
+        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
+        assert_eq!(s1, s2);
+    }
+
 }

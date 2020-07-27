@@ -74,7 +74,7 @@ fn bup_cuts_1() {
 fn rsyncable_cuts_1() {
     cut_test(
         0,
-        hash_roll::rsyncable::Rsyncable::default(),
+        hash_roll::gzip::Rsyncable::default(),
         &[2941, 2077, 5263, 7263, 392, 4371, 5204],
     )
 }
@@ -84,7 +84,7 @@ fn rsyncable_cuts_2() {
     // chosen so we check window removal
     cut_test(
         2,
-        hash_roll::rsyncable::Rsyncable::default(),
+        hash_roll::gzip::Rsyncable::default(),
         &[9277, 2758, 3074, 7415, 3579, 4141],
     )
 }
@@ -106,7 +106,7 @@ fn zpaq_cuts_0() {
     //     zpaq a foo.zpaq ~/p/hash-roll/test_data_0.bin -fragment 3
     cut_test(
         0,
-        hash_roll::zpaq::Zpaq::with_average_size(3),
+        hash_roll::zpaq::Zpaq::with_average_size_pow_2(3),
         &[10785, 6329, 1287, 860, 4716, 7419],
     )
 }
@@ -116,10 +116,19 @@ fn zpaq_cuts_3() {
     // These match edges from Zpaq 7.15 (with modification to print the fragment sizes).
     //     
     //     cargo run --example generate-test-data 3 >test_data_3.bin
-    //     zpaq a foo.zpaq ~/p/hash-roll/test_data_0.bin -fragment 3
+    //     zpaq a foo.zpaq ~/p/hash-roll/test_data_3.bin -fragment 3
     cut_test(
         3,
-        hash_roll::zpaq::Zpaq::with_average_size(3),
+        hash_roll::zpaq::Zpaq::with_average_size_pow_2(3),
         &[16353, 2334, 970, 5326, 1557],
+    )
+}
+
+#[test]
+fn pigz_cuts_0() {
+    cut_test(
+        0,
+        hash_roll::pigz::PigzRsyncable::default(),
+        &[9069, 1191, 3685, 8629, 2119, 2939],
     )
 }

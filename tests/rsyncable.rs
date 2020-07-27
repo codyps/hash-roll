@@ -1,4 +1,4 @@
-use hash_roll::rsyncable::Rsyncable;
+use hash_roll::gzip::Rsyncable;
 use hash_roll::Splitter;
 
 #[test]
