@@ -101,7 +101,7 @@ fn buzhash_cuts_1() {
 #[test]
 fn zpaq_cuts_0() {
     // These match edges from Zpaq 7.15 (with modification to print the fragment sizes).
-    //     
+    //
     //     cargo run --example generate-test-data 0 >test_data_0.bin
     //     zpaq a foo.zpaq ~/p/hash-roll/test_data_0.bin -fragment 3
     cut_test(
@@ -114,7 +114,7 @@ fn zpaq_cuts_0() {
 #[test]
 fn zpaq_cuts_3() {
     // These match edges from Zpaq 7.15 (with modification to print the fragment sizes).
-    //     
+    //
     //     cargo run --example generate-test-data 3 >test_data_3.bin
     //     zpaq a foo.zpaq ~/p/hash-roll/test_data_3.bin -fragment 3
     cut_test(

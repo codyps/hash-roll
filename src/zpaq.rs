@@ -222,7 +222,7 @@ impl Chunk for Zpaq {
 impl ZpaqIncr {
     fn feed(&mut self, v: u8) -> u32 {
         self.idx += 1;
-        self.state.feed(v) 
+        self.state.feed(v)
     }
 
     fn reset(&mut self) {
@@ -267,8 +267,9 @@ pub struct ZpaqHash {
 
 impl PartialEq for ZpaqHash {
     fn eq(&self, other: &Self) -> bool {
-        self.hash == other.hash && self.last_byte == other.last_byte &&
-            &self.predicted_byte[..] == &other.predicted_byte[..]
+        self.hash == other.hash
+            && self.last_byte == other.last_byte
+            && &self.predicted_byte[..] == &other.predicted_byte[..]
     }
 }
 

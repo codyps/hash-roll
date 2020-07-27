@@ -95,13 +95,13 @@ pub mod buzhash_table;
 pub mod fastcdc;
 pub mod gear;
 pub mod gear_table;
+pub mod gzip;
 pub mod mii;
+pub mod pigz;
 pub mod ram;
 pub mod range;
-pub mod gzip;
-pub mod pigz;
-pub mod zstd;
 pub mod zpaq;
+pub mod zstd;
 
 pub(crate) use range::RangeExt;
 

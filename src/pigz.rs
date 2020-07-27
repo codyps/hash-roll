@@ -14,11 +14,7 @@ impl PigzRsyncable {
     pub fn with_bits(bits: u8) -> PigzRsyncable {
         let mask = (1 << bits) - 1;
         let hit = mask >> 1;
-        PigzRsyncable {
-            bits,
-            mask,
-            hit
-        }
+        PigzRsyncable { bits, mask, hit }
     }
 }
 
@@ -66,9 +62,7 @@ struct PigzRsyncableState {
 
 impl From<&PigzRsyncable> for PigzRsyncableState {
     fn from(params: &PigzRsyncable) -> Self {
-        PigzRsyncableState {
-            hash: params.hit
-        }
+        PigzRsyncableState { hash: params.hit }
     }
 }
 
@@ -103,16 +97,12 @@ pub struct PigzRsyncableIncr {
     state: PigzRsyncableState,
 }
 
-impl PigzRsyncableIncr {
-}
+impl PigzRsyncableIncr {}
 
 impl From<PigzRsyncable> for PigzRsyncableIncr {
     fn from(params: PigzRsyncable) -> Self {
         let state = PigzRsyncableState::from(&params);
-        PigzRsyncableIncr {
-            params,
-            state,
-        }
+        PigzRsyncableIncr { params, state }
     }
 }
 
