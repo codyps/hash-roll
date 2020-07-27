@@ -1,8 +1,9 @@
+//! `zpaq` impliments the chunking algorithm used in the zpaq archiving tool
+
 use std::fmt;
 use std::num::Wrapping;
-use std::convert::TryInto;
 
-use crate::{Chunk, ChunkIncr, RangeExt, Splitter};
+use crate::{Chunk, ChunkIncr, RangeExt};
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
@@ -24,7 +25,7 @@ use std::ops::RangeBounds;
  *
  * Parameters:
  *
- *  - fragment (aka average_size_base_2): average size = 2**fragment KiB
+ *  - fragment (aka average_size_pow_2): average size = 2**fragment KiB
  *      in Zpaq (the compressor), this defaults to 6
  *  - min_size, max_size: additional bounds on the blocks. Not technically needed for the algorithm
  *      to function
@@ -45,7 +46,6 @@ use std::ops::RangeBounds;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Zpaq {
     range: (Bound<u64>, Bound<u64>),
-    fragment: u8,
     max_hash: u32,
 }
 
@@ -109,12 +109,14 @@ impl Zpaq {
     }
 
     /**
-     * Create a splitter using the defaults from Zpaq (the compressor) given a average size is base
-     * 2 (zpaq argument "-fragment")
+     * Create a splitter using the defaults from Zpaq (the compressor) given a average size
+     * formated as a power of 2.
+     *
+     * Corresponds to zpaq's argument "-fragment".
      */
-    pub fn with_average_size(average_size_base_2: u8) -> Self {
-        let r = Self::range_from_fragment_ave(average_size_base_2);
-        Self::with_average_and_range(average_size_base_2, r)
+    pub fn with_average_size_pow_2(average_size_pow_2: u8) -> Self {
+        let r = Self::range_from_fragment_ave(average_size_pow_2);
+        Self::with_average_and_range(average_size_pow_2, r)
     }
 
     /**
@@ -132,18 +134,19 @@ impl Zpaq {
      *
      * All the other constructors use this internally
      */
-    pub fn with_average_and_range(average_size_base_2: u8, range: impl RangeBounds<u64>) -> Self {
+    pub fn with_average_and_range(average_size_pow_2: u8, range: impl RangeBounds<u64>) -> Self {
         Zpaq {
             range: range.into_tuple(),
-            fragment: average_size_base_2,
-            max_hash: Self::max_hash_from_fragment_ave(average_size_base_2),
+            max_hash: Self::max_hash_from_fragment_ave(average_size_pow_2),
         }
     }
 
+    /*
     fn average_block_size(&self) -> u64 {
         /* I don't know If i really trust this, do some more confirmation */
         1024 << self.fragment
     }
+    */
 
     fn split_here(&self, hash: u32, index: u64) -> bool {
         (hash < self.max_hash && !self.range.under_min(&index)) || self.range.exceeds_max(&index)
@@ -157,10 +160,14 @@ impl Default for Zpaq {
      * Average size is 65536 bytes (64KiB), max is 520192 bytes (508KiB), min is 4096 bytes (4KiB)
      */
     fn default() -> Self {
-        Self::with_average_size(6)
+        Self::with_average_size_pow_2(6)
     }
 }
 
+/// Incrimental instance of [`Zpaq`].
+///
+/// `Zpaq` doesn't require input look back, so the incrimental and non-incrimental performance
+/// should be similar.
 #[derive(Debug)]
 pub struct ZpaqIncr {
     params: Zpaq,
@@ -168,6 +175,7 @@ pub struct ZpaqIncr {
     idx: u64,
 }
 
+/// Intermediate state from [`Chunk::find_chunk_edge`] for [`Zpaq`].
 #[derive(Default, Debug)]
 pub struct ZpaqSearchState {
     state: ZpaqHash,
@@ -243,45 +251,6 @@ impl From<Zpaq> for ZpaqIncr {
             params,
             state: Default::default(),
             idx: 0,
-        }
-    }
-}
-
-impl Splitter for Zpaq {
-    fn find_chunk_edge<'b>(&self, data: &'b [u8]) -> usize {
-        let mut s = ZpaqHash::default();
-        let mut l = 0;
-        for (i, &v) in data.iter().enumerate() {
-            if self.split_here(s.feed(v), (i + 1) as u64) {
-                l = i + 1;
-                break;
-            }
-        }
-
-        l
-    }
-
-    fn next_iter<T: Iterator<Item = u8>>(&self, iter: T) -> Option<Vec<u8>> {
-        let a = self.average_block_size();
-        /* FIXME: ideally we'd allocate enough capacity to contain a large percentage of the
-         * blocks. Just doing average probably will net us ~50% of blocks not needing additional
-         * allocation. We really need to know the PDF (and standard-deviation) to make a better
-         * prediction here. That said, even with additional data, this is a trade off with extra
-         * space consumed vs number of allocations/reallocations
-         */
-        let mut w = Vec::with_capacity((a + a / 2).try_into().unwrap());
-        let mut s = ZpaqHash::default();
-        for v in iter {
-            w.push(v);
-            if self.split_here(s.feed(v), w.len() as u64) {
-                return Some(w);
-            }
-        }
-
-        if w.is_empty() {
-            None
-        } else {
-            Some(w)
         }
     }
 }
