@@ -1,4 +1,4 @@
-use crate::{Chunk, ChunkIncr};
+use crate::{Chunk, ChunkIncr, ToChunkIncr};
 use std::fmt;
 use std::num::Wrapping;
 /* Cyclic polynomial (buzhash)
@@ -108,7 +108,6 @@ impl<'a> BuzHash<BuzHashTableByteSaltHash<'a>> {
 
 impl<H: BuzHashHash + Clone> Chunk for BuzHash<H> {
     type SearchState = BuzHashSearchState;
-    type Incr = BuzHashIncr<H>;
 
     fn find_chunk_edge(
         &self,
@@ -135,9 +134,18 @@ impl<H: BuzHashHash + Clone> Chunk for BuzHash<H> {
         hs.offset = data.len();
         Err(hs)
     }
+}
 
-    fn incrimental(&self) -> Self::Incr {
-        From::from(self.clone())
+impl<H: BuzHashHash + Clone> From<&BuzHash<H>> for BuzHashIncr<H> {
+    fn from(src: &BuzHash<H>) -> Self {
+        src.clone().into()
+    }
+}
+
+impl<H: BuzHashHash + Clone> ToChunkIncr for BuzHash<H> {
+    type Incr = BuzHashIncr<H>;
+    fn to_chunk_incr(&self) -> Self::Incr {
+        self.into()
     }
 }
 

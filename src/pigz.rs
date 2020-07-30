@@ -1,4 +1,4 @@
-use crate::{Chunk, ChunkIncr};
+use crate::{Chunk, ChunkIncr, ToChunkIncr};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PigzRsyncable {
@@ -26,7 +26,6 @@ impl Default for PigzRsyncable {
 
 impl Chunk for PigzRsyncable {
     type SearchState = PigzRsyncableSearchState;
-    type Incr = PigzRsyncableIncr;
 
     fn find_chunk_edge(
         &self,
@@ -49,9 +48,18 @@ impl Chunk for PigzRsyncable {
         hs.offset = data.len();
         Err(hs)
     }
+}
 
-    fn incrimental(&self) -> Self::Incr {
-        From::from(self.clone())
+impl From<&PigzRsyncable> for PigzRsyncableIncr {
+    fn from(src: &PigzRsyncable) -> Self {
+        src.clone().into() 
+    }
+}
+
+impl ToChunkIncr for PigzRsyncable {
+    type Incr = PigzRsyncableIncr;
+    fn to_chunk_incr(&self) -> Self::Incr {
+        self.into()
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::ChunkIncr;
+use crate::{ChunkIncr, ToChunkIncr};
 
 /// C. Zhang et al., "MII: A Novel Content Defined Chunking Algorithm for Finding Incremental Data
 /// in Data Synchronization," in IEEE Access, vol. 7, pp. 86932-86945, 2019, doi:
@@ -38,7 +38,6 @@ impl Default for Mii {
 
 impl crate::Chunk for Mii {
     type SearchState = MiiSearchState;
-    type Incr = MiiIncr;
 
     fn find_chunk_edge(
         &self,
@@ -47,7 +46,7 @@ impl crate::Chunk for Mii {
     ) -> Result<usize, Self::SearchState> {
         let mut state = match state {
             Some(s) => s,
-            None => self.incrimental().into(),
+            None => Into::<MiiIncr>::into(self).into(),
         };
 
         match state.push(data) {
@@ -55,9 +54,19 @@ impl crate::Chunk for Mii {
             None => Err(state),
         }
     }
+}
 
-    fn incrimental(&self) -> Self::Incr {
-        From::from(self.clone())
+impl From<&Mii> for MiiIncr {
+    fn from(src: &Mii) -> Self {
+        src.clone().into() 
+    }
+}
+
+impl ToChunkIncr for Mii {
+    type Incr = MiiIncr;
+
+    fn to_chunk_incr(&self) -> Self::Incr {
+        self.into()
     }
 }
 

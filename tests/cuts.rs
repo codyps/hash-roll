@@ -1,8 +1,8 @@
-use hash_roll::{Chunk, ChunkIncr};
+use hash_roll::{Chunk, ChunkIncr, ToChunkIncr};
 use rand::RngCore;
 use rand_pcg::Pcg64;
 
-fn cut_test<C: Chunk>(seed: u128, chunker: C, expected_splits: &[usize]) {
+fn cut_test<C: Chunk + ToChunkIncr>(seed: u128, chunker: C, expected_splits: &[usize]) {
     let mut fill_rng = Pcg64::new(seed, 0xa02bdbf7bb3c0a7ac28fa16a64abf96);
     let mut buf = [0u8; 8192 * 4];
     fill_rng.fill_bytes(&mut buf);
@@ -28,7 +28,7 @@ fn cut_test<C: Chunk>(seed: u128, chunker: C, expected_splits: &[usize]) {
     // checking will be done via quickcheck tests.
     let mut incr_splits = Vec::with_capacity(expected_splits.len());
     {
-        let mut incr = chunker.incrimental();
+        let mut incr = chunker.to_chunk_incr();
         let buf = &buf[..];
         let mut last_split = 0;
         for (i, v) in buf.iter().enumerate() {

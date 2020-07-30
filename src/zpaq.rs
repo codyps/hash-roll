@@ -3,7 +3,7 @@
 use std::fmt;
 use std::num::Wrapping;
 
-use crate::{Chunk, ChunkIncr, RangeExt};
+use crate::{Chunk, ChunkIncr, RangeExt, ToChunkIncr};
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
@@ -191,7 +191,6 @@ impl ZpaqSearchState {
 
 impl Chunk for Zpaq {
     type SearchState = ZpaqSearchState;
-    type Incr = ZpaqIncr;
 
     fn find_chunk_edge(
         &self,
@@ -213,9 +212,18 @@ impl Chunk for Zpaq {
         hs.offset = data.len();
         Err(hs)
     }
+}
 
-    fn incrimental(&self) -> Self::Incr {
-        From::from(self.clone())
+impl From<&Zpaq> for ZpaqIncr {
+    fn from(s: &Zpaq) -> Self {
+        s.clone().into()
+    }
+}
+
+impl ToChunkIncr for Zpaq {
+    type Incr = ZpaqIncr;
+    fn to_chunk_incr(&self) -> Self::Incr {
+        self.into()
     }
 }
 

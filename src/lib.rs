@@ -107,11 +107,20 @@ pub(crate) use range::RangeExt;
 
 /// Accept incrimental input and provide indexes of split points
 ///
-/// Note that for some splitting/chunking algorithms, this mechanism will be less efficient. In
-/// particular, algorithms like [`Rsyncable`] that require the use of previously examined data to
-/// shift their "window" (resulting in needing a circular buffer which all inputed data passes
-/// through) will perform more poorly using [`ChunkIncr`] compared with internal or one-shot
-/// interfaces.
+/// Compared to [`Chunk`], [`ChunkIncr`] allows avoiding having to buffer all input data in memory,
+/// and avoids the need to use a single buffer for storing the input data (even if all data is in
+/// memory).
+///
+/// Data fed into a given [`ChunkIncr`] instance is considered to be part of the same
+/// data "source". This affects chunking algorithms that maintain some state between chunks
+/// (like `ZstdRsyncable` does). If you have multiple "sources", one should obtain new instances of
+/// [`ChunkIncr`] for each of them (typically via [`ToChunkIncr`]).
+///
+/// Note that for some splitting/chunking algorithms, the incrimental api will be less efficient
+/// compared to the non-incrimental API. In particular, algorithms like [`Rsyncable`] that require
+/// the use of previously examined data to shift their "window" (resulting in needing a circular
+/// buffer which all inputed data passes through) will perform more poorly using [`ChunkIncr`]
+/// compared with non-incrimental interfaces
 pub trait ChunkIncr {
     /// The data "contained" within a implimentor of this trait is the history of all data slices
     /// passed to feed.
@@ -221,9 +230,6 @@ pub trait Chunk {
     /// already done.
     type SearchState;
 
-    /// `Incr` provides the incrimental interface to this chunking instance
-    type Incr: ChunkIncr;
-
     /// Find the location in `data` to split the data
     ///
     /// If no split point is found, the `SearchState` is returned. One should only use the
@@ -255,16 +261,22 @@ pub trait Chunk {
         state: Option<Self::SearchState>,
         data: &[u8],
     ) -> Result<usize, Self::SearchState>;
+}
 
-    /// `incrimental()` returns a [`ChunkIncr`] which can be incrimentally fed data and emits
-    /// chunks.
+/// Implimented on types which can be converted to/can provide a [`ChunkIncr`] interface.
+///
+/// Types that impliment this generally represent a instantiation of a chunking algorithm.
+pub trait ToChunkIncr {
+    /// `Incr` provides the incrimental interface to this chunking instance
+    type Incr: ChunkIncr;
+
+    /// `to_chunk_incr()` returns a [`ChunkIncr`] which can be incrimentally fed data and emits
+    /// chunks. 
     ///
-    /// This allows avoiding having to buffer all data in memory, and avoids the need to use a
-    /// single buffer (even if all data is in memory).
-    ///
-    /// Note that some algorithms that need to look back through their data to update their state
-    /// will be less efficient when the incrimental interface is used
-    fn incrimental(&self) -> Self::Incr;
+    /// Generally, this is a typically low cost operation that copies from the implimentor or does
+    /// minor computation on its fields and may allocate some memory for storing additional state
+    /// needed for incrimental computation.
+    fn to_chunk_incr(&self) -> Self::Incr;
 }
 
 /// `Splitter`s define how to split a stream of bytes into chunks. They are instances of CDC

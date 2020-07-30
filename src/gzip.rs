@@ -1,4 +1,4 @@
-use crate::{Chunk, ChunkIncr, Splitter};
+use crate::{Chunk, ChunkIncr, Splitter, ToChunkIncr};
 use std::collections::VecDeque;
 use std::num::Wrapping;
 
@@ -71,7 +71,6 @@ impl Default for Rsyncable {
 
 impl Chunk for Rsyncable {
     type SearchState = RsyncableSearchState;
-    type Incr = RsyncableIncr;
 
     fn find_chunk_edge(
         &self,
@@ -94,9 +93,18 @@ impl Chunk for Rsyncable {
         hs.offset = data.len();
         Err(hs)
     }
+}
 
-    fn incrimental(&self) -> Self::Incr {
-        From::from(self.clone())
+impl From<&Rsyncable> for RsyncableIncr {
+    fn from(src: &Rsyncable) -> Self {
+        src.clone().into() 
+    }
+}
+
+impl ToChunkIncr for Rsyncable {
+    type Incr = RsyncableIncr;
+    fn to_chunk_incr(&self) -> Self::Incr {
+        self.into()
     }
 }
 
