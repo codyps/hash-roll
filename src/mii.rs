@@ -58,7 +58,7 @@ impl crate::Chunk for Mii {
 
 impl From<&Mii> for MiiIncr {
     fn from(src: &Mii) -> Self {
-        src.clone().into() 
+        src.clone().into()
     }
 }
 

@@ -97,7 +97,7 @@ impl Chunk for Rsyncable {
 
 impl From<&Rsyncable> for RsyncableIncr {
     fn from(src: &Rsyncable) -> Self {
-        src.clone().into() 
+        src.clone().into()
     }
 }
 

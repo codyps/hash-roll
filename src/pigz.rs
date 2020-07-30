@@ -52,7 +52,7 @@ impl Chunk for PigzRsyncable {
 
 impl From<&PigzRsyncable> for PigzRsyncableIncr {
     fn from(src: &PigzRsyncable) -> Self {
-        src.clone().into() 
+        src.clone().into()
     }
 }
 

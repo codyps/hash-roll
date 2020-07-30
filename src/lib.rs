@@ -271,7 +271,7 @@ pub trait ToChunkIncr {
     type Incr: ChunkIncr;
 
     /// `to_chunk_incr()` returns a [`ChunkIncr`] which can be incrimentally fed data and emits
-    /// chunks. 
+    /// chunks.
     ///
     /// Generally, this is a typically low cost operation that copies from the implimentor or does
     /// minor computation on its fields and may allocate some memory for storing additional state

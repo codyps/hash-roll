@@ -16,8 +16,8 @@
 //! API doesn't account for this (it assumes chunks are independent). `ChunkIncr` is able to
 //! represent this (because it controls resetting of the state between chunks).
 //!
-use std::num::Wrapping;
 use crate::{Chunk, ChunkIncr};
+use std::num::Wrapping;
 
 /*
 *
