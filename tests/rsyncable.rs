@@ -1,4 +1,4 @@
-use hash_roll::gzip::Rsyncable;
+use hash_roll::gzip::GzipRsyncable;
 use hash_roll::Splitter;
 
 #[test]
@@ -9,8 +9,8 @@ fn test_rsyncable() {
     let mut d2 = d1.clone();
     d2[4] = ':' as u8;
 
-    let b1 = Rsyncable::with_window_and_modulus(4, 8).into_vecs(d1.iter().cloned());
-    let b2 = Rsyncable::with_window_and_modulus(4, 8).into_vecs(d2.iter().cloned());
+    let b1 = GzipRsyncable::with_window_and_modulus(4, 8).into_vecs(d1.iter().cloned());
+    let b2 = GzipRsyncable::with_window_and_modulus(4, 8).into_vecs(d2.iter().cloned());
 
     let c1 = b1.clone().count();
     let c2 = b2.clone().count();

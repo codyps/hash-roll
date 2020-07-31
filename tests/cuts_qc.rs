@@ -52,7 +52,7 @@ proptest! {
         buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
         buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
     {
-        let chunker = hash_roll::gzip::Rsyncable::default();
+        let chunker = hash_roll::gzip::GzipRsyncable::default();
         let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
         let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
         assert_eq!(s1, s2);

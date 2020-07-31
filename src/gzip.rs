@@ -46,7 +46,7 @@ use std::num::Wrapping;
 ///
 /// Trigger splits when H(n) == 0
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Rsyncable {
+pub struct GzipRsyncable {
     /*
      * TODO: if we can avoid loading entire files into memory, this could be u64
      */
@@ -54,23 +54,23 @@ pub struct Rsyncable {
     modulus: u64,
 }
 
-impl Rsyncable {
-    pub fn with_window_and_modulus(window: usize, modulus: u64) -> Rsyncable {
-        Rsyncable {
+impl GzipRsyncable {
+    pub fn with_window_and_modulus(window: usize, modulus: u64) -> GzipRsyncable {
+        Self {
             window_len: window,
             modulus,
         }
     }
 }
 
-impl Default for Rsyncable {
+impl Default for GzipRsyncable {
     fn default() -> Self {
         Self::with_window_and_modulus(8192, 4096)
     }
 }
 
-impl Chunk for Rsyncable {
-    type SearchState = RsyncableSearchState;
+impl Chunk for GzipRsyncable {
+    type SearchState = GzipRsyncableSearchState;
 
     fn find_chunk_edge(
         &self,
@@ -95,60 +95,60 @@ impl Chunk for Rsyncable {
     }
 }
 
-impl From<&Rsyncable> for RsyncableIncr {
-    fn from(src: &Rsyncable) -> Self {
+impl From<&GzipRsyncable> for GzipRsyncableIncr {
+    fn from(src: &GzipRsyncable) -> Self {
         src.clone().into()
     }
 }
 
-impl ToChunkIncr for Rsyncable {
-    type Incr = RsyncableIncr;
+impl ToChunkIncr for GzipRsyncable {
+    type Incr = GzipRsyncableIncr;
     fn to_chunk_incr(&self) -> Self::Incr {
         self.into()
     }
 }
 
 #[derive(Debug, Default, Clone)]
-struct RsyncableState {
+struct GzipRsyncableState {
     accum: Wrapping<u64>,
 }
 
-/// Intermediate state for [`Rsyncable::find_chunk_edge`]
+/// Intermediate state for [`GzipRsyncable::find_chunk_edge`]
 ///
 /// Using this avoids re-computation of data when no edge is found
 #[derive(Debug, Default, Clone)]
-pub struct RsyncableSearchState {
+pub struct GzipRsyncableSearchState {
     offset: usize,
-    state: RsyncableState,
+    state: GzipRsyncableState,
 }
 
-/// Provides an incremental interface to [`Rsyncable`]
+/// Provides an incremental interface to [`GzipRsyncable`]
 ///
-/// Performance Note: [`Rsyncable`] requires look-back. As a result, [`RsyncableIncr`] internally
+/// Performance Note: [`GzipRsyncable`] requires look-back. As a result, [`GzipRsyncableIncr`] internally
 /// buffers data up to the window size. This additional copying may affect performance. If
 /// possible for your use case, use the non-incremental interface.
 ///
-/// See [`Rsyncable`] for details on the underlying algorithm
+/// See [`GzipRsyncable`] for details on the underlying algorithm
 #[derive(Debug, Clone)]
-pub struct RsyncableIncr {
-    params: Rsyncable,
+pub struct GzipRsyncableIncr {
+    params: GzipRsyncable,
 
     accum: Wrapping<u64>,
     // really poor efficiency
     window: VecDeque<u8>,
 }
 
-impl RsyncableIncr {
+impl GzipRsyncableIncr {
     fn reset(&mut self) {
         self.window.clear();
         self.accum = Wrapping(0);
     }
 }
 
-impl From<Rsyncable> for RsyncableIncr {
-    fn from(params: Rsyncable) -> Self {
+impl From<GzipRsyncable> for GzipRsyncableIncr {
+    fn from(params: GzipRsyncable) -> Self {
         let window = VecDeque::with_capacity(params.window_len);
-        RsyncableIncr {
+        GzipRsyncableIncr {
             params,
             accum: Wrapping(0),
             window,
@@ -156,8 +156,8 @@ impl From<Rsyncable> for RsyncableIncr {
     }
 }
 
-impl RsyncableState {
-    fn add(&mut self, data: &[u8], parent: &Rsyncable, i: usize, v: u8) -> bool {
+impl GzipRsyncableState {
+    fn add(&mut self, data: &[u8], parent: &GzipRsyncable, i: usize, v: u8) -> bool {
         if i >= parent.window_len {
             self.accum -= Wrapping(data[i - parent.window_len] as u64);
         }
@@ -166,7 +166,7 @@ impl RsyncableState {
     }
 }
 
-impl ChunkIncr for RsyncableIncr {
+impl ChunkIncr for GzipRsyncableIncr {
     fn push(&mut self, data: &[u8]) -> Option<usize> {
         for (i, &v) in data.iter().enumerate() {
             if self.window.len() >= self.params.window_len {
@@ -186,9 +186,9 @@ impl ChunkIncr for RsyncableIncr {
     }
 }
 
-impl Splitter for Rsyncable {
+impl Splitter for GzipRsyncable {
     fn find_chunk_edge<'a, 'b>(&'a self, data: &'b [u8]) -> usize {
-        let mut hs = RsyncableState::default();
+        let mut hs = GzipRsyncableState::default();
 
         let mut l = 0;
         for (i, &v) in data.iter().enumerate() {
@@ -202,7 +202,7 @@ impl Splitter for Rsyncable {
     }
 
     fn next_iter<'a, T: Iterator<Item = u8>>(&'a self, iter: T) -> Option<Vec<u8>> {
-        let mut hs = RsyncableState::default();
+        let mut hs = GzipRsyncableState::default();
 
         let a = self.window_len + self.window_len / 2;
         let mut data = Vec::with_capacity(a);

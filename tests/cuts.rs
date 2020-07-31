@@ -74,7 +74,7 @@ fn bup_cuts_1() {
 fn rsyncable_cuts_1() {
     cut_test(
         0,
-        hash_roll::gzip::Rsyncable::default(),
+        hash_roll::gzip::GzipRsyncable::default(),
         &[2941, 2077, 5263, 7263, 392, 4371, 5204],
     )
 }
@@ -84,7 +84,7 @@ fn rsyncable_cuts_2() {
     // chosen so we check window removal
     cut_test(
         2,
-        hash_roll::gzip::Rsyncable::default(),
+        hash_roll::gzip::GzipRsyncable::default(),
         &[9277, 2758, 3074, 7415, 3579, 4141],
     )
 }
