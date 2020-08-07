@@ -10,17 +10,28 @@ fn cut_test<C: Chunk + ToChunkIncr>(seed: u128, chunker: C, expected_splits: &[u
     // Note: this doesn't validate SearchState at all
     let mut splits = Vec::with_capacity(expected_splits.len());
     {
-        let mut buf = &buf[..];
+        let mut state = chunker.to_search_state();
+        let mut discard_idx = 0;
+        let mut last_chunk_idx = 0;
         loop {
-            match chunker.find_chunk_edge(None, &buf[..]) {
-                Ok(split_point) => {
-                    splits.push(split_point);
-                    buf = &buf[split_point..];
+            let b = &buf[discard_idx..];
+            let (split_point, discard_ct) = chunker.find_chunk_edge(&mut state, b);
+            match split_point {
+                Some(split_point) => {
+                    let split_point_global = discard_idx + split_point;
+                    if last_chunk_idx > split_point_global {
+                        panic!("last_chunk_idx: {}, split_point_global: {}, split_point: {}, discard_idx: {}",
+                            last_chunk_idx, split_point_global, split_point, discard_idx);
+                    }
+                    let split_len = split_point_global - last_chunk_idx;
+                    last_chunk_idx = split_point_global;
+                    splits.push(split_len);
                 }
-                Err(_) => {
+                None => {
                     break;
                 }
             }
+            discard_idx += discard_ct;
         }
     }
 
@@ -47,6 +58,7 @@ fn cut_test<C: Chunk + ToChunkIncr>(seed: u128, chunker: C, expected_splits: &[u
     assert_eq!(expected_splits, &splits[..]);
 }
 
+#[cfg(feature = "mii")]
 #[test]
 fn mii_cuts_1() {
     cut_test(
@@ -60,7 +72,7 @@ fn mii_cuts_1() {
     );
 }
 
-/*
+#[cfg(feature = "bup")]
 #[test]
 fn bup_cuts_1() {
     cut_test(0,
@@ -68,10 +80,10 @@ fn bup_cuts_1() {
         &[]
     )
 }
-*/
 
+#[cfg(feature = "gzip")]
 #[test]
-fn rsyncable_cuts_1() {
+fn gzip_cuts_1() {
     cut_test(
         0,
         hash_roll::gzip::GzipRsyncable::default(),
@@ -79,8 +91,9 @@ fn rsyncable_cuts_1() {
     )
 }
 
+#[cfg(feature = "gzip")]
 #[test]
-fn rsyncable_cuts_2() {
+fn gzip_cuts_2() {
     // chosen so we check window removal
     cut_test(
         2,
@@ -89,15 +102,17 @@ fn rsyncable_cuts_2() {
     )
 }
 
+#[cfg(feature = "buzhash")]
 #[test]
 fn buzhash_cuts_1() {
     cut_test(
         0,
         hash_roll::buzhash::BuzHash::new_nom(0),
-        &[7839, 1342, 9741, 2703, 875, 3549],
+        &[6265, 1745, 11527, 6851, 1089],
     )
 }
 
+#[cfg(feature = "zpaq")]
 #[test]
 fn zpaq_cuts_0() {
     // These match edges from Zpaq 7.15 (with modification to print the fragment sizes).
@@ -111,6 +126,7 @@ fn zpaq_cuts_0() {
     )
 }
 
+#[cfg(feature = "zpaq")]
 #[test]
 fn zpaq_cuts_3() {
     // These match edges from Zpaq 7.15 (with modification to print the fragment sizes).
@@ -124,6 +140,7 @@ fn zpaq_cuts_3() {
     )
 }
 
+#[cfg(feature = "pigz")]
 #[test]
 fn pigz_cuts_0() {
     cut_test(

@@ -1,3 +1,4 @@
+#![cfg(feature = "pigz")]
 use crate::{Chunk, ChunkIncr, ToChunkIncr};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,26 +28,25 @@ impl Default for PigzRsyncable {
 impl Chunk for PigzRsyncable {
     type SearchState = PigzRsyncableSearchState;
 
+    fn to_search_state(&self) -> Self::SearchState {
+        self.into()
+    }
+
     fn find_chunk_edge(
         &self,
-        state: Option<Self::SearchState>,
+        state: &mut Self::SearchState,
         data: &[u8],
-    ) -> Result<usize, Self::SearchState> {
-        let mut hs = match state {
-            Some(v) => v,
-            None => Self::SearchState::from(self),
-        };
-
-        for i in hs.offset..data.len() {
+    ) -> (Option<usize>, usize) {
+        for i in 0..data.len() {
             let v = data[i];
 
-            if hs.state.add(self, v) {
-                return Ok(i + 1);
+            if state.state.add(self, v) {
+                *state = self.to_search_state();
+                return (Some(i + 1), i + 1);
             }
         }
 
-        hs.offset = data.len();
-        Err(hs)
+        (None, data.len())
     }
 }
 
@@ -79,14 +79,12 @@ impl From<&PigzRsyncable> for PigzRsyncableState {
 /// Using this avoids re-computation of data when no edge is found
 #[derive(Debug, Clone)]
 pub struct PigzRsyncableSearchState {
-    offset: usize,
     state: PigzRsyncableState,
 }
 
 impl From<&PigzRsyncable> for PigzRsyncableSearchState {
     fn from(params: &PigzRsyncable) -> Self {
         PigzRsyncableSearchState {
-            offset: 0,
             state: From::from(params),
         }
     }

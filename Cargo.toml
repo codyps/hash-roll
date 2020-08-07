@@ -10,6 +10,17 @@ documentation = "https://docs.rs/hash-roll"
 include = ["Cargo.toml", "**/*.rs", "README.md", "COMPARE.md"]
 edition = "2018"
 
+[features]
+default = ["mii", "pigz", "buzhash"]
+
+mii = []
+pigz = []
+gzip = []
+zstd = []
+fastcdc = []
+buzhash = []
+bup = []
+
 [dependencies]
 fmt-extra = "0.2"
 #circbuf = "0.1.4"

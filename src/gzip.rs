@@ -72,26 +72,28 @@ impl Default for GzipRsyncable {
 impl Chunk for GzipRsyncable {
     type SearchState = GzipRsyncableSearchState;
 
+    fn to_search_state(&self) -> Self::SearchState {
+        Self::SearchState::default()
+    }
+
     fn find_chunk_edge(
         &self,
-        state: Option<Self::SearchState>,
+        state: &mut Self::SearchState,
         data: &[u8],
-    ) -> Result<usize, Self::SearchState> {
-        let mut hs = match state {
-            Some(v) => v,
-            None => Self::SearchState::default(),
-        };
-
-        for i in hs.offset..data.len() {
+    ) -> (Option<usize>, usize) {
+        for i in state.offset..data.len() {
             let v = data[i];
 
-            if hs.state.add(data, self, i, v) {
-                return Ok(i + 1);
+            if state.state.add(data, self, i, v) {
+                state.reset();
+                return (Some(i + 1), i + 1);
             }
         }
 
-        hs.offset = data.len();
-        Err(hs)
+        // keep k elements = discard all but k
+        let discard_ct = data.len().saturating_sub(self.window_len);
+        state.offset = data.len() - discard_ct;
+        (None, discard_ct)
     }
 }
 
@@ -113,6 +115,12 @@ struct GzipRsyncableState {
     accum: Wrapping<u64>,
 }
 
+impl GzipRsyncableState {
+    fn reset(&mut self) {
+        self.accum.0 = 0;
+    }
+}
+
 /// Intermediate state for [`GzipRsyncable::find_chunk_edge`]
 ///
 /// Using this avoids re-computation of data when no edge is found
@@ -120,6 +128,13 @@ struct GzipRsyncableState {
 pub struct GzipRsyncableSearchState {
     offset: usize,
     state: GzipRsyncableState,
+}
+
+impl GzipRsyncableSearchState {
+    fn reset(&mut self) {
+        self.offset = 0;
+        self.state.reset();
+    }
 }
 
 /// Provides an incremental interface to [`GzipRsyncable`]

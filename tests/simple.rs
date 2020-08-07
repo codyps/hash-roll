@@ -1,3 +1,4 @@
+#![cfg(feature = "gzip")]
 use hash_roll::Splitter;
 
 #[test]

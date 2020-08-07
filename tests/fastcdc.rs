@@ -1,3 +1,5 @@
+#![cfg(feature = "fastcdc")]
+
 use hash_roll::fastcdc::FastCdcIncr;
 use hash_roll::ChunkIncr;
 use rand_pcg::Pcg64;

@@ -1,3 +1,4 @@
+#![cfg(feature = "bup")]
 use quickcheck::quickcheck;
 
 use hash_roll::ChunkIncr;

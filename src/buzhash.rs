@@ -109,30 +109,51 @@ impl<'a> BuzHash<BuzHashTableByteSaltHash<'a>> {
 impl<H: BuzHashHash + Clone> Chunk for BuzHash<H> {
     type SearchState = BuzHashSearchState;
 
+    fn to_search_state(&self) -> Self::SearchState {
+        Self::SearchState::default()
+    }
+
     fn find_chunk_edge(
         &self,
-        state: Option<Self::SearchState>,
+        state: &mut Self::SearchState,
         data: &[u8],
-    ) -> Result<usize, Self::SearchState> {
-        let mut hs = match state {
-            Some(v) => v,
-            None => Self::SearchState::default(),
-        };
+    ) -> (Option<usize>, usize) {
+        println!(" -> fce: data.len(): {}, state.offset: {}", data.len(), state.offset);
 
-        for i in hs.offset..data.len() {
-            hs.state.add_buf(data, self, i);
+        assert!(state.offset <= self.k);
+        assert!(data.len() >= state.offset);
+        for i in state.offset..data.len() {
+            println!("  i: {:2}, v: {}", i, data[i]);
+            state.state.add_buf(data, self, i);
+            println!("  h: {:04x}", state.state.h);
 
-            if (hs.state.h & self.mask) == self.mask {
-                return Ok(i + 1);
+            if (state.state.h & self.mask) == self.mask {
+                state.reset();
+                println!(" <- CHUNK: {}", i + 1);
+                return (Some(i + 1), i + 1);
             }
 
+            /*
+             * broken: `i` is not the number of bytes since prev chunk.
+             * need to track internal last chunk
             if i as u64 > self.max_chunk_size {
-                return Ok(i + 1);
+                state.reset();
+                println!(" <- CHUNK: {}", i + 1);
+                return (Some(i + 1), i + 1);
             }
+            */
         }
 
-        hs.offset = data.len();
-        Err(hs)
+        let keep_ct = if data.len() > self.k {
+            self.k
+        } else {
+            data.len()
+        };
+        let discard_ct = data.len() - keep_ct;
+        state.offset = keep_ct;
+        println!(" <- fce: discard_ct: {}, data.len(): {}, k: {}, state.offset = {}",
+            discard_ct, data.len(), self.k, state.offset);
+        (None, discard_ct)
     }
 }
 
@@ -155,6 +176,13 @@ pub struct BuzHashSearchState {
     state: BuzHashState,
 }
 
+impl BuzHashSearchState {
+    fn reset(&mut self) {
+        self.offset = 0;
+        self.state.reset();
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct BuzHashState {
     /// current value of the hash.
@@ -167,7 +195,7 @@ impl BuzHashState {
     }
 
     fn add_buf<H: BuzHashHash>(&mut self, data: &[u8], params: &BuzHash<H>, i: usize) {
-        if i > params.k {
+        if i >= params.k {
             // need to find and "remove" a entry
             let drop_i = i - params.k;
             let drop = data[drop_i];
@@ -236,7 +264,7 @@ impl<H: BuzHashHash> BuzHashIncr<H> {
     }
 
     fn push_byte(&mut self, val: u8) {
-        if self.input_idx > self.params.k as u64 {
+        if self.input_idx >= self.params.k as u64 {
             let o = self.buf[self.buf_idx.0];
             self.state.add_overflow(&self.params, val, o);
         } else {

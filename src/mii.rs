@@ -1,3 +1,4 @@
+#![cfg(feature = "mii")]
 use crate::{ChunkIncr, ToChunkIncr};
 
 /// C. Zhang et al., "MII: A Novel Content Defined Chunking Algorithm for Finding Incremental Data
@@ -39,19 +40,21 @@ impl Default for Mii {
 impl crate::Chunk for Mii {
     type SearchState = MiiSearchState;
 
+    fn to_search_state(&self) -> Self::SearchState {
+        Into::<MiiIncr>::into(self).into()
+    }
+
     fn find_chunk_edge(
         &self,
-        state: Option<Self::SearchState>,
+        state: &mut Self::SearchState,
         data: &[u8],
-    ) -> Result<usize, Self::SearchState> {
-        let mut state = match state {
-            Some(s) => s,
-            None => Into::<MiiIncr>::into(self).into(),
-        };
-
+    ) -> (Option<usize>, usize) {
         match state.push(data) {
-            Some(v) => Ok(v),
-            None => Err(state),
+            Some(v) => {
+                state.reset();
+                (Some(v), v)
+            },
+            None => (None, data.len()),
         }
     }
 }
@@ -72,23 +75,24 @@ impl ToChunkIncr for Mii {
 
 #[derive(Debug)]
 pub struct MiiSearchState {
-    offset: usize,
     incr: MiiIncr,
+}
+
+impl MiiSearchState {
+    fn reset(&mut self) {
+        self.incr.reset();
+    }
 }
 
 impl From<MiiIncr> for MiiSearchState {
     fn from(incr: MiiIncr) -> Self {
-        Self { offset: 0, incr }
+        Self { incr }
     }
 }
 
 impl MiiSearchState {
     fn push(&mut self, data: &[u8]) -> Option<usize> {
-        let d = &data[self.offset..];
-        assert!(data.len() >= self.offset);
-        let r = self.incr.push(d).map(|x| x + self.offset);
-        self.offset = data.len();
-        r
+        self.incr.push(data)
     }
 }
 
@@ -133,5 +137,12 @@ impl ChunkIncr for MiiIncr {
         }
 
         None
+    }
+}
+
+impl MiiIncr {
+    fn reset(&mut self) {
+        self.prev = 0xff;
+        self.increment = 0;
     }
 }

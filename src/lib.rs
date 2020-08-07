@@ -12,7 +12,7 @@
 //!
 //! ## API Concepts
 //!
-//! - Configured Algorithm Instance (impliments [`Splitter`]). Normally named plainly (like
+//! - Configured Algorithm Instance (impliments [`Chunk`]). Normally named plainly (like
 //!   [`Bup`]). These can be thought of as "parameters" for an algorithm.
 //! - Incrimental (impliments [`ChunkIncr`]). Normally named with `Incr` suffix.
 //!
@@ -23,7 +23,7 @@
 //! algorithm. For example, this might mean configuring a window size or how to decide where to
 //! split. These don't include any mutable data, in other words: they don't keep track of what data
 //! is given to them. Configured Algorithm Instances provide the all-at-once APIs, as well as
-//! methods to obtain other kinds of APIs, like Incrimentals.
+//! methods to obtain other kinds of APIs, like incrimental style apis.
 //!
 //! ## CDC Algorithms and Window Buffering
 //!
@@ -52,6 +52,11 @@
 //!  - stream data through
 //!    - incrimenal: yes
 //!    - input: `&[u8]`
+//!
+//!  - mmap (or read entire) file, emit
+//!    - incrimenal: no
+//!    - input: `&[u8]`
+//!    - output: `&[u8]`
 
 // # API Design Notes
 //
@@ -97,11 +102,11 @@ pub mod gear;
 pub mod gear_table;
 pub mod gzip;
 pub mod mii;
+pub mod range;
 pub mod pigz;
 pub mod ram;
-pub mod range;
-pub mod zpaq;
-pub mod zstd;
+//pub mod zpaq;
+//pub mod zstd;
 
 pub(crate) use range::RangeExt;
 
@@ -225,47 +230,122 @@ impl<'a, C: ChunkIncr> Iterator for IterSlicesPartial<'a, C> {
 }
 
 /// Impl on algorthms that define methods of chunking data
+///
+/// This is the lowest level (but somewhat restrictive) trait for chunking algorthms.  It assumes
+/// that the input is provided to it in a contiguous slice. If you don't have your input as a
+/// contiguous slice, [`ChunkIncr`] may be a better choice (it allows non-contiguous input, but may
+/// be slowing for some chunking algorthms).
 pub trait Chunk {
     /// `SearchState` allows searching for the chunk edge to resume without duplicating work
     /// already done.
     type SearchState;
 
-    /// Find the location in `data` to split the data
+    /*
+    /// Amount of data from already emitted chunks requried for determining future chunks
     ///
-    /// If no split point is found, the `SearchState` is returned. One should only use the
-    /// `SearchState` if `find_chunk_edge()` will be called again with a new `data` that consists
-    /// of the previous `data` with a suffix added. In other words, if `data` is extended with
-    /// additional bytes.
+    /// Indicates the amount of data that _must_ be preserved for [`find_chunk_edge()`]'s
+    /// `prev_data` argument. If more that this is passed, the last bytes in the slice are used. At
+    /// the start of an input (where there is no previous data), an empty slice would be used.
     ///
-    /// An alternate that doesn't require repeatedly passing `data` is the [`incrimental()`]
-    /// incrimental api.
+    /// For most chunking algorithms, this is `0` (zero), indicating that `prev_data` may always be
+    /// an empty slice.
+    const CARRY_LEN: usize;
+    */
+
+    /// Provide an initial [`SearchState`] for use with [`find_chunk_edge()`]. Generally, for each
+    /// input one should generate a new [`SearchState`].
+    fn to_search_state(&self) -> Self::SearchState;
+
+    /// Find the next "chunk" in `data` to emit
+    ///
+    /// The return value is a pair of a range representing the start and end of the chunk being
+    /// emitted, and the offset from which subsequent `data` subsets should be passed to the next
+    /// call to `find_chunk_edge`.
+    ///
+    /// `state` is mutated so that it does not rexamine previously examined data, even when a chunk
+    /// is not emitted.
+    ///
+    /// `data` may be extended with additional data between calls to `find_chunk_edge()`. The bytes
+    /// that were _previously_ in `data` and are not indicated by `discard_ct` must be preserved in
+    /// the next `data` buffer called.
+    /// 
+    /// ```rust
+    /// use hash_roll::Chunk;
+    ///
+    /// fn some_chunk() -> impl Chunk {
+    ///     hash_roll::mii::Mii::default()
+    /// }
+    ///
+    /// let chunk = some_chunk();
+    /// let orig_data = b"hello";
+    /// let mut data = &orig_data[..];
+    /// let mut ss = chunk.to_search_state();
+    /// let mut prev_cut = 0;
+    ///
+    /// loop {
+    ///    let (chunk, discard_ct) = chunk.find_chunk_edge(&mut ss, data);
+    ///
+    ///    match chunk {
+    ///        Some(cut_point) => {
+    ///            // map `cut_point` from the current slice back into the original slice so we can
+    ///            // have consistent indexes
+    ///            let g_cut = cut_point + orig_data.len() - data.len();
+    ///            println!("chunk: {:?}", &orig_data[prev_cut..cut_point]);
+    ///        },
+    ///        None => {
+    ///            println!("no chunk, done with data we have");
+    ///            println!("remain: {:?}", &data[discard_ct..]);
+    ///            break;
+    ///        }
+    ///    }
+    ///
+    ///    data = &data[discard_ct..];
+    /// }
+    /// ```
+    ///
+    /// Note: call additional times on the same `SearchState` and the required `data` to obtain
+    /// subsequent chunks in the same input data. To handle a seperate input, use a new
+    /// `SearchState`.
     ///
     /// Note: calling with a previous `state` with a new `data` that isn't an extention of the
     /// previous `data` will result in split points that may not follow the design of the
     /// underlying algorithm. Avoid relying on consistent cut points to reason about memory safety.
     ///
-    /// Note: if this returns a cut point (as `Ok(usize)`), and you want further splitting, you
-    /// should pass the _remainder_ of the `data` with `state: None`.
-    // Potential pitfal: for better performance, keeping the return value small is a very good
-    // idea. By returning `SearchState`, we've potentially enlarged the return value quite a bit.
+    // NOTE: the reason that we preserve `state` even when chunks are emitted is that some
+    // algorthims require some state to pass between chunks for a given input. zstd includes an
+    // example of an algorithm that needs this
     //
-    // Another alterate here is to have one pass in a `&mut SearchState`. The downside is that it
-    // would then need to be cleared to prevent common issues with re-use (ie: we expect to see a
-    // loop with a single `SearchState`, and requring explicit `reset()`ing of the `SearchState`
-    // will increase error rates.
+    // Potential pitfal: for better performance, keeping the return value small is a very good
+    // idea. By returning ~4x64, we are might be less performant depending on the ABI selected.
     //
     // Consider if result should return `(&[u8], &[u8])` instead of an index (which would then be
     // given to `.split_at()`
+    //
+    // Consider if `state` should have a `reset()` method to avoid reallocating
+    //
+    // API:
+    //  - `fn find_chunk_edge(&self, state: &mut Self::SearchState, data: &[u8]) -> (Option<(usize, uszie)>, usize);
+    //     - Problem: unclear what indexes of slices represent: start can't be in the data being
+    //       passed because we don't require `data` include the start of the chunk
+    //  - `fn find_chunk_edge(&self, state: &mut Self::SearchState, data: &[u8]) -> (Option<usize>, usize);
+    //     - Problem: user code to track indexing match up is somewhat difficult
+    //     - mostly due to needing an extra index to track to handle the "last chunk" location not
+    //     being the "slice we need to pass start"
     fn find_chunk_edge(
         &self,
-        state: Option<Self::SearchState>,
+        state: &mut Self::SearchState,
         data: &[u8],
-    ) -> Result<usize, Self::SearchState>;
+    ) -> (Option<usize>, usize);
 }
 
 /// Implimented on types which can be converted to/can provide a [`ChunkIncr`] interface.
 ///
 /// Types that impliment this generally represent a instantiation of a chunking algorithm.
+// NOTE: we use this instead of just having `From<&C: Chunk> for CI: ChunkIncr` because there is
+// _one_ `ChunkIncr` for each `Chunk`, and rust can't infer that when using a `From` or `Into`
+// bound.
+//
+// We could consider adding `type Incr` into `trait Chunk`, or only having `type Incr`
 pub trait ToChunkIncr {
     /// `Incr` provides the incrimental interface to this chunking instance
     type Incr: ChunkIncr;

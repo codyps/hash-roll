@@ -1,3 +1,4 @@
+#![cfg(feature = "rsyncable")]
 use hash_roll::gzip::GzipRsyncable;
 use hash_roll::Splitter;
 
