@@ -77,7 +77,7 @@ fn mii_cuts_1() {
 fn bup_cuts_1() {
     cut_test(0,
         hash_roll::bup::RollSum::default(),
-        &[]
+        &[2600, 6245]
     )
 }
 

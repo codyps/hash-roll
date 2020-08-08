@@ -118,18 +118,11 @@ impl<H: BuzHashHash + Clone> Chunk for BuzHash<H> {
         state: &mut Self::SearchState,
         data: &[u8],
     ) -> (Option<usize>, usize) {
-        println!(" -> fce: data.len(): {}, state.offset: {}", data.len(), state.offset);
-
-        assert!(state.offset <= self.k);
-        assert!(data.len() >= state.offset);
         for i in state.offset..data.len() {
-            println!("  i: {:2}, v: {}", i, data[i]);
             state.state.add_buf(data, self, i);
-            println!("  h: {:04x}", state.state.h);
 
             if (state.state.h & self.mask) == self.mask {
                 state.reset();
-                println!(" <- CHUNK: {}", i + 1);
                 return (Some(i + 1), i + 1);
             }
 
@@ -144,15 +137,9 @@ impl<H: BuzHashHash + Clone> Chunk for BuzHash<H> {
             */
         }
 
-        let keep_ct = if data.len() > self.k {
-            self.k
-        } else {
-            data.len()
-        };
-        let discard_ct = data.len() - keep_ct;
-        state.offset = keep_ct;
-        println!(" <- fce: discard_ct: {}, data.len(): {}, k: {}, state.offset = {}",
-            discard_ct, data.len(), self.k, state.offset);
+        // keep k elements = discard all but k
+        let discard_ct = data.len().saturating_sub(self.k);
+        state.offset = data.len() - discard_ct;
         (None, discard_ct)
     }
 }

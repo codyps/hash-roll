@@ -11,7 +11,7 @@ include = ["Cargo.toml", "**/*.rs", "README.md", "COMPARE.md"]
 edition = "2018"
 
 [features]
-default = ["mii", "pigz", "buzhash", "gzip"]
+default = ["mii", "pigz", "buzhash", "gzip", "bup"]
 
 mii = []
 pigz = []
