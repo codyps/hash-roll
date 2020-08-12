@@ -158,11 +158,21 @@ fn pigz_cuts_0() {
 
 #[cfg(feature = "zstd")]
 #[test]
-fn zstd_cuts_0() {
+fn zstd_cuts_0_2mb() {
     cut_test_sz(
         0,
         1024 * 1024 * 2,
         hash_roll::zstd::Zstd::default(),
         &[1660511],
+    )
+}
+
+#[cfg(feature = "gear")]
+#[test]
+fn gear32_cuts_0() {
+    cut_test(
+        0,
+        hash_roll::gear::Gear32::default(),
+        &[11031, 7789, 10463],
     )
 }

@@ -1,4 +1,6 @@
-use super::ChunkIncr;
+#![cfg(feature = "gear")]
+
+use crate::{Chunk, ChunkIncr, ToChunkIncr};
 use std::fmt;
 use std::num::Wrapping;
 
@@ -10,6 +12,7 @@ use std::num::Wrapping;
 ///  fast delta compression approach. Performance Evaluation 79 (2014), 258-271.
 ///
 ///  http://wxia.hustbackup.cn/pub/DElta-PEVA-2014.pdf
+#[derive(Clone)]
 pub struct Gear32<'a> {
     /// A mask with an appropriate number of bits set for the desired average chunk size.
     ///
@@ -25,11 +28,57 @@ pub struct Gear32<'a> {
     ///
     /// fixed configuration.
     gear: &'a [u32; 256],
+}
 
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
+pub struct GearState32 {
     /// current fingerprint/hash
     ///
     /// varying state.
     fp: Wrapping<u32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GearIncr32<'a> {
+    params: Gear32<'a>,
+
+    state: GearState32,
+}
+
+impl<'a> Chunk for Gear32<'a> {
+    type SearchState = GearState32;
+
+    fn to_search_state(&self) -> Self::SearchState {
+        Default::default()
+    }
+
+    fn find_chunk_edge(&self, state: &mut Self::SearchState, data: &[u8]) -> (Option<usize>, usize) {
+        for i in 0..data.len() {
+            if state.push(self, data[i]) {
+                *state = self.to_search_state();
+                return (Some(i + 1), i + 1);
+            }
+        }
+
+        (None, data.len())
+    }
+}
+
+impl<'a> ToChunkIncr for Gear32<'a> {
+    type Incr = GearIncr32<'a>;
+
+    fn to_chunk_incr(&self) -> Self::Incr {
+        self.into()
+    }
+}
+
+impl<'a> From<&Gear32<'a>> for GearIncr32<'a> {
+    fn from(params: &Gear32<'a>) -> Self {
+        Self {
+            params: params.clone(),
+            state: Default::default(),
+        }
+    } 
 }
 
 impl<'a> fmt::Debug for Gear32<'a> {
@@ -38,24 +87,29 @@ impl<'a> fmt::Debug for Gear32<'a> {
             .field("mask", &self.mask)
             .field("xxx", &self.xxx)
             .field("gear", &&self.gear[..])
-            .field("fp", &self.fp)
             .finish()
     }
 }
 
-impl<'a> ChunkIncr for Gear32<'a> {
+impl GearState32 {
+    fn push(&mut self, params: &Gear32<'_>, add: u8) -> bool {
+        self.fp = (self.fp << 1) + Wrapping(params.gear[add as usize]);
+        self.fp.0 & params.mask == params.xxx
+    }
+
+    fn reset(&mut self) {
+        self.fp.0 = 0;
+    }
+}
+
+impl<'a> ChunkIncr for GearIncr32<'a> {
     fn push(&mut self, data: &[u8]) -> Option<usize> {
-        let mut fp = self.fp;
         for (i, v) in data.iter().enumerate() {
-            fp = (fp << 1) + Wrapping(self.gear[*v as usize]);
-            if fp.0 & self.mask == self.xxx {
-                self.fp = Wrapping(0);
+            if self.state.push(&self.params, *v) {
+                self.state.reset();
                 return Some(i);
             }
         }
-
-        // no match
-        self.fp = fp;
 
         None
     }
@@ -73,9 +127,8 @@ fn msb_mask(log2: usize) -> u32 {
 impl<'a> Gear32<'a> {
     /// Create a gear chunker which emits blocks with average size `(1<<average_size_log2)`, (or:
     /// `2**average_size_log2`
-    fn with_average_size_log2(average_size_log2: usize) -> Self {
+    pub fn with_average_size_log2(average_size_log2: usize) -> Self {
         Gear32 {
-            fp: Wrapping(0),
             mask: msb_mask(average_size_log2),
             xxx: 0,
             gear: &super::gear_table::GEAR_32,
