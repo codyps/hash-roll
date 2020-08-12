@@ -174,4 +174,43 @@ proptest! {
         let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
         assert_eq!(s1, s2);
     }
+
+    #[test]
+    #[cfg(feature = "gear")]
+    fn gear_fce_self_consistent_with_varying_buf_size(
+        data in prop::collection::vec(0u8..=255u8, 0..100000),
+        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
+        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
+    {
+        let chunker = hash_roll::gear::Gear32::default();
+        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
+        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
+        assert_eq!(s1, s2);
+    }
+
+    #[test]
+    #[cfg(feature = "fastcdc")]
+    fn fastcdc_fce_self_consistent_with_varying_buf_size(
+        data in prop::collection::vec(0u8..=255u8, 0..100000),
+        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
+        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
+    {
+        let chunker = hash_roll::fastcdc::FastCdc::default();
+        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
+        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
+        assert_eq!(s1, s2);
+    }
+
+    #[test]
+    #[cfg(feature = "ram")]
+    fn ram_fce_self_consistent_with_varying_buf_size(
+        data in prop::collection::vec(0u8..=255u8, 0..100000),
+        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
+        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
+    {
+        let chunker = hash_roll::ram::Ram::with_w(8192);
+        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
+        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
+        assert_eq!(s1, s2);
+    }
 }
