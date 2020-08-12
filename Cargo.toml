@@ -11,15 +11,25 @@ include = ["Cargo.toml", "**/*.rs", "README.md", "COMPARE.md"]
 edition = "2018"
 
 [features]
-default = ["mii", "pigz", "buzhash", "gzip", "bup"]
+default = [
+	"bup",
+	"buzhash",
+	"gzip",
+	"mii",
+	"pigz",
+	"zstd"
+]
 
+bup = []
+buzhash = []
+fastcdc = []
+gear = []
+gzip = []
 mii = []
 pigz = []
-gzip = []
+ram = []
+zpaq = []
 zstd = []
-fastcdc = []
-buzhash = []
-bup = []
 
 [dependencies]
 fmt-extra = "0.2"

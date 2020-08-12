@@ -1,50 +1,54 @@
+//! gzip (forks) rsyncable mode that uses a simple window accumulator
+//!
+//! **WARNING: not validated against gzip or rsyncrypto algorithms. Output may change to fix bugs**
+//!
+//! A widely distributed patch for gzip adds a `--rsyncable` flag which causes `gzip` to split it's
+//! input on "stable" boundaries. This module impliments the algorithm used in that patch.
+//! 
+//! The same algorithm is used by the `rsyncrypto` project.
+//!
+//!  - No maximum block size is provided.
+//!  - No minimum block size is provided.
+//!
+//! PDF of block sizes: ???
+//!
+//! Note that the defacto-standard parameters allow a slightly more efficient check for a block
+//! split (by replacing a modulus with a bitwise-and). This impl currently doesn't allow that
+//! optimization even if you provide appropriate parameters (we need type-level integers for that).
+//!
+//! Parameters:
+//!
+//!  - window-len: The maximum number of bytes to be examined when deciding to split a block.
+//!              set to 8192 by default in gzip-rsyncable & rsyncrypto)
+//!  - modulus:    set to half of window-len (so, 4096) in gzip-rsyncable & rsyncrypto.
+//!
+//! In-block state:
+//!  - window of window-len bytes (use of the iterator interface means we also track more bytes than
+//!      this)
+//!  - sum (u64)
+//!
+//! Between-block state:
+//!
+//! - none
+//!
+//! References:
+//!
+//! - http://rsyncrypto.lingnu.com/index.php/Algorithm
+//! - https://www.samba.org/~tridge/phd_thesis.pdf
+//!
+//! S(n) = sum(c_i, var=i, top=n, bottom=n-8196)
+//!
+//! A(n) = S(n) / 8192
+//!
+//! H(n) = S(n) mod 4096
+//!
+//! Trigger splits when H(n) == 0
+
 use crate::{Chunk, ChunkIncr, Splitter, ToChunkIncr};
 use std::collections::VecDeque;
 use std::num::Wrapping;
 
-/// Window-based splitter using a simple accumulator & modulus hash.
-///
-/// Used by the gzip rsyncable patch (still not merged, but widely distributed) as
-/// well as the rsyncrypto project to split the unerlying content into variable sized blocks prior
-/// to applying a filter (compression and/or encryption) to the blocks, which the intent of allowing
-/// the resulting filtered data to be more easily propogated via rsync.
-///
-///  - No maximum block size is provided.
-///  - No minimum block size is provided.
-///
-/// PDF of block sizes: ???
-///
-/// Note that the defacto-standard parameters allow a slightly more efficient check for a block
-/// split (by replacing a modulus with a bitwise-and). This impl currently doesn't allow that
-/// optimization even if you provide appropriate parameters (we need type-level integers for that).
-///
-/// Parameters:
-///
-///  - window-len: The maximum number of bytes to be examined when deciding to split a block.
-///              set to 8192 by default in gzip-rsyncable & rsyncrypto)
-///  - modulus:    set to half of window-len (so, 4096) in gzip-rsyncable & rsyncrypto.
-///
-/// In-block state:
-///  - window of window-len bytes (use of the iterator interface means we also track more bytes than
-///      this)
-///  - sum (u64)
-///
-/// Between-block state:
-///
-/// - none
-///
-/// References:
-///
-/// - http://rsyncrypto.lingnu.com/index.php/Algorithm
-/// - https://www.samba.org/~tridge/phd_thesis.pdf
-///
-/// S(n) = sum(c_i, var=i, top=n, bottom=n-8196)
-///
-/// A(n) = S(n) / 8192
-///
-/// H(n) = S(n) mod 4096
-///
-/// Trigger splits when H(n) == 0
+/// Parameters for defining the gzip rsyncable algorithm
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GzipRsyncable {
     /*
@@ -99,7 +103,8 @@ impl Chunk for GzipRsyncable {
 
 impl From<&GzipRsyncable> for GzipRsyncableIncr {
     fn from(src: &GzipRsyncable) -> Self {
-        src.clone().into()
+        src.clone()
+            .into()
     }
 }
 

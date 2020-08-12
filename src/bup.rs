@@ -50,12 +50,6 @@ impl Chunk for RollSum {
         ) -> (Option<usize>, usize) {
 
         for i in state.offset..data.len() {
-            /*
-            if i < self.window_len {
-                continue;
-            }
-            */
-            
             let a = data[i];
             let d = if i >= self.window_len {
                 data[i - self.window_len]
@@ -91,9 +85,10 @@ pub struct RollSumState {
 impl From<&RollSum> for RollSumState {
     fn from(s: &RollSum) -> Self {
         let ws = Wrapping(s.window_len as u32);
-        // NOTE: bup uses this initialization, but librsync uses zeros. The bup variant is an
-        // optimization to avoid needing to pass the initial `window_len` bytes through the roll
-        // sum explicitly
+        // NOTE: bup uses this initialization, but librsync uses zeros.
+        //
+        // I believe the idea is to allow a slightly different implimentation of the "setup"
+        // portion of the processing (ie: before the window is filled)
         Self {
             s1: ws * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
             s2: ws * (ws - Wrapping(1)) * Wrapping(ROLLSUM_CHAR_OFFSET as u32),

@@ -2,9 +2,9 @@ use hash_roll::{Chunk, ChunkIncr, ToChunkIncr};
 use rand::RngCore;
 use rand_pcg::Pcg64;
 
-fn cut_test<C: Chunk + ToChunkIncr>(seed: u128, chunker: C, expected_splits: &[usize]) {
+fn cut_test_sz<C: Chunk + ToChunkIncr>(seed: u128, size: usize, chunker: C, expected_splits: &[usize]) {
     let mut fill_rng = Pcg64::new(seed, 0xa02bdbf7bb3c0a7ac28fa16a64abf96);
-    let mut buf = [0u8; 8192 * 4];
+    let mut buf = vec![0u8; size];
     fill_rng.fill_bytes(&mut buf);
 
     // Note: this doesn't validate SearchState at all
@@ -56,6 +56,10 @@ fn cut_test<C: Chunk + ToChunkIncr>(seed: u128, chunker: C, expected_splits: &[u
 
     assert_eq!(&splits[..], &incr_splits[..]);
     assert_eq!(expected_splits, &splits[..]);
+}
+
+fn cut_test<C: Chunk + ToChunkIncr>(seed: u128, chunker: C, expected_splits: &[usize]) {
+    cut_test_sz(seed, 8192 * 4, chunker, expected_splits)
 }
 
 #[cfg(feature = "mii")]
@@ -147,5 +151,16 @@ fn pigz_cuts_0() {
         0,
         hash_roll::pigz::PigzRsyncable::default(),
         &[9069, 1191, 3685, 8629, 2119, 2939],
+    )
+}
+
+#[cfg(feature = "zstd")]
+#[test]
+fn zstd_cuts_0() {
+    cut_test_sz(
+        0,
+        1024 * 1024 * 2,
+        hash_roll::zstd::Zstd::default(),
+        &[1660511],
     )
 }

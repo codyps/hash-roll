@@ -85,7 +85,7 @@ pub struct PigzRsyncableSearchState {
 impl From<&PigzRsyncable> for PigzRsyncableSearchState {
     fn from(params: &PigzRsyncable) -> Self {
         PigzRsyncableSearchState {
-            state: From::from(params),
+            state: params.into(),
         }
     }
 }
@@ -107,7 +107,7 @@ impl PigzRsyncableIncr {}
 
 impl From<PigzRsyncable> for PigzRsyncableIncr {
     fn from(params: PigzRsyncable) -> Self {
-        let state = PigzRsyncableState::from(&params);
+        let state = (&params).into();
         PigzRsyncableIncr { params, state }
     }
 }
@@ -123,7 +123,7 @@ impl ChunkIncr for PigzRsyncableIncr {
     fn push(&mut self, data: &[u8]) -> Option<usize> {
         for (i, &v) in data.iter().enumerate() {
             if self.state.add(&self.params, v) {
-                self.state = PigzRsyncableState::from(&self.params);
+                self.state = (&self.params).into();
                 return Some(i + 1);
             }
         }

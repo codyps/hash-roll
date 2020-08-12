@@ -1,3 +1,11 @@
+//! BuzHash (aka Cyclic Polynomial Hashing) is a window based rolling hash
+//!
+//! BuzHash with various chunk-splitting methods is used in:
+//!   - [Borg](https://github.com/borgbackup/borg)
+//!   - [Attic](https://github.com/jborg/attic)
+//!     - via [silvasur/buzhash](https://github.com/silvasur/buzhash)
+//!   - [attic-labs/nom](https://github.com/attic-labs/noms/blob/26620a34bc8c95812037588869d4790b5581b34d/go/types/rolling_value_hasher.go#L15-L21)
+//!
 use crate::{Chunk, ChunkIncr, ToChunkIncr};
 use std::fmt;
 use std::num::Wrapping;
@@ -40,13 +48,6 @@ use std::num::Wrapping;
 /// in total cancelation of the internal hash, which can cause overly long chunks.
 ///
 /// Adjusting `mask` changes the average chunk size.
-///
-/// BuzHash with various chunk-splitting methods is used in:
-///   - [Borg](https://github.com/borgbackup/borg)
-///   - [Attic](https://github.com/jborg/attic)
-///     - via [silvasur/buzhash](https://github.com/silvasur/buzhash)
-///   - [attic-labs/nom](https://github.com/attic-labs/noms/blob/26620a34bc8c95812037588869d4790b5581b34d/go/types/rolling_value_hasher.go#L15-L21)
-///
 ///
 /// # Performance
 ///
