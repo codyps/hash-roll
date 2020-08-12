@@ -230,3 +230,13 @@ fn fastcdc_cuts_0() {
         &[8463, 9933, 9029],
     )
 }
+
+#[cfg(feature = "ram")]
+#[test]
+fn ram_cuts_0() {
+    cut_test(
+        0,
+        hash_roll::ram::Ram::with_w(8192),
+        &[8264, 8368, 8341]
+    )
+}

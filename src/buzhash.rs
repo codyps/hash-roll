@@ -1,3 +1,5 @@
+#![cfg(feature = "buzhash")]
+
 //! BuzHash (aka Cyclic Polynomial Hashing) is a window based rolling hash
 //!
 //! BuzHash with various chunk-splitting methods is used in:

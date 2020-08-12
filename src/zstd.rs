@@ -1,3 +1,5 @@
+#![cfg(feature = "zstd")]
+
 //! zstd's `--rsyncable` option performs content defined chunking
 //!
 //! **WARNING: NOT VALIDATED AGAINST ZSTD. RESULTS MAY NOT MATCH ZSTD RSYNCABLE. OUTPUT MAY CHANGE

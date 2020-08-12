@@ -1,3 +1,5 @@
+#![cfg(feature = "fastcdc")]
+
 use crate::{Chunk, ToChunkIncr, ChunkIncr};
 use std::fmt;
 use std::num::Wrapping;

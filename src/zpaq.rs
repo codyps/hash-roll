@@ -1,3 +1,5 @@
+#![cfg(feature = "zpaq")]
+
 //! `zpaq` impliments the chunking algorithm used in the zpaq archiving tool
 
 use std::fmt;

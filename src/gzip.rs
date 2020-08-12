@@ -1,3 +1,5 @@
+#![cfg(feature = "gzip")]
+
 //! gzip (forks) rsyncable mode that uses a simple window accumulator
 //!
 //! **WARNING: not validated against gzip or rsyncrypto algorithms. Output may change to fix bugs**
