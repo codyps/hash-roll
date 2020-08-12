@@ -2,6 +2,39 @@ use hash_roll::{Chunk, ChunkIncr, ToChunkIncr};
 use rand::RngCore;
 use rand_pcg::Pcg64;
 
+fn cut_test_incr<C: ChunkIncr>(
+    seed: u128,
+    size: usize,
+    chunker: C,
+    expected_splits: &[usize],
+) {
+    let mut fill_rng = Pcg64::new(seed, 0xa02bdbf7bb3c0a7ac28fa16a64abf96);
+    let mut buf = vec![0u8; size];
+    fill_rng.fill_bytes(&mut buf);
+
+    // Note: this is only basic equivalance checking via byte-at-a-time. More full equivalance
+    // checking will be done via quickcheck tests.
+    let mut incr_splits = Vec::with_capacity(expected_splits.len());
+    {
+        let mut incr = chunker;
+        let buf = &buf[..];
+        let mut last_split = 0;
+        for (i, v) in buf.iter().enumerate() {
+            match incr.push(&[*v]) {
+                Some(_split_point) => {
+                    let sp = i + 1;
+                    incr_splits.push(sp - last_split);
+                    last_split = sp;
+                }
+                None => {}
+            }
+        }
+    }
+
+    assert_eq!(expected_splits, &incr_splits[..]);
+}
+
+
 fn cut_test_sz<C: Chunk + ToChunkIncr>(
     seed: u128,
     size: usize,
@@ -174,5 +207,26 @@ fn gear32_cuts_0() {
         0,
         hash_roll::gear::Gear32::default(),
         &[11031, 7789, 10463],
+    )
+}
+
+#[cfg(feature = "fastcdc")]
+#[test]
+fn fastcdc_cuts_incr_0() {
+    cut_test_incr(
+        0,
+        8192 * 4,
+        hash_roll::fastcdc::FastCdcIncr::default(),
+        &[8463, 9933, 9029],
+    )
+}
+
+#[cfg(feature = "fastcdc")]
+#[test]
+fn fastcdc_cuts_0() {
+    cut_test(
+        0,
+        hash_roll::fastcdc::FastCdc::default(),
+        &[8463, 9933, 9029],
     )
 }

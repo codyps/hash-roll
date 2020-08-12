@@ -1,4 +1,4 @@
-use super::ChunkIncr;
+use crate::{Chunk, ToChunkIncr, ChunkIncr};
 use std::fmt;
 use std::num::Wrapping;
 
@@ -58,6 +58,21 @@ impl<'a> fmt::Debug for FastCdc<'a> {
     }
 }
 
+impl<'a> Chunk for FastCdc<'a> {
+    type SearchState = FastCdcState;
+
+    fn to_search_state(&self) -> Self::SearchState {
+        Default::default()
+    }
+
+    fn find_chunk_edge(&self, state: &mut Self::SearchState, data: &[u8]) -> (Option<usize>, usize) {
+        match state.push(self, data) {
+            Some(i) => (Some(i + 1), i + 1),
+            None => (None, data.len()),
+        }
+    }
+}
+
 impl<'a> FastCdc<'a> {
     /// Create a custom FastCDC instance
     pub fn new(gear: &'a [u64; 256], min_size: u64, normal_size: u64, max_size: u64) -> Self {
@@ -70,6 +85,23 @@ impl<'a> FastCdc<'a> {
     }
 }
 
+impl<'a> ToChunkIncr for FastCdc<'a> {
+    type Incr = FastCdcIncr<'a>;
+
+    fn to_chunk_incr(&self) -> Self::Incr {
+        self.into()
+    }
+}
+
+impl<'a> From<&FastCdc<'a>> for FastCdcIncr<'a> {
+    fn from(params: &FastCdc<'a>) -> Self {
+        Self {
+            params: params.clone(),
+            state: Default::default(),
+        }
+    }
+}
+
 /// FastCdcIncr provides an incrimental interface to `FastCdc`
 ///
 /// This impl does not buffer data passing through it (the FastCDC algorithm does not require
@@ -77,7 +109,11 @@ impl<'a> FastCdc<'a> {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FastCdcIncr<'a> {
     params: FastCdc<'a>,
+    state: FastCdcState,
+}
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct FastCdcState {
     /// Number of bytes we've "examined"
     ///
     /// varying state.
@@ -89,38 +125,28 @@ pub struct FastCdcIncr<'a> {
     fp: Wrapping<u64>,
 }
 
-impl<'a> FastCdcIncr<'a> {
-    /// Use custom parameters (different gear, different size)
-    pub fn with_params(params: FastCdc<'a>) -> Self {
-        Self {
-            params,
-            ..Default::default()
-        }
-    }
-
+impl FastCdcState {
     fn reset(&mut self) {
         self.l = 0;
         self.fp = Wrapping(0);
     }
-}
 
-impl<'a> ChunkIncr for FastCdcIncr<'a> {
-    fn push(&mut self, src: &[u8]) -> Option<usize> {
+    fn push(&mut self, params: &FastCdc<'_>, data: &[u8]) -> Option<usize> {
         // global start/index
         let mut gi = self.l;
         // global end
-        let ge = src.len() as u64 + gi;
+        let ge = data.len() as u64 + gi;
 
-        if ge <= self.params.min_size {
+        if ge <= params.min_size {
             // No split, no processing of data, but we've "consumed" the bytes.
             self.l = ge;
             return None;
         }
 
-        // skip elements prior to MIN_SIZE and track offset of new `src` in argument `src` for
+        // skip elements prior to MIN_SIZE and track offset of new `data` in argument `data` for
         // return value
-        let mut i = if gi <= self.params.min_size {
-            let skip = self.params.min_size - gi;
+        let mut i = if gi <= params.min_size {
+            let skip = params.min_size - gi;
             gi += skip;
             skip
         } else {
@@ -130,16 +156,16 @@ impl<'a> ChunkIncr for FastCdcIncr<'a> {
         let mut fp = self.fp;
 
         loop {
-            if i >= src.len() {
+            if i >= data.len() {
                 break;
             }
-            if gi >= self.params.normal_size {
+            if gi >= params.normal_size {
                 // go to next set of matches
                 break;
             }
 
-            let v = src[i];
-            fp = (fp << 1) + Wrapping(self.params.gear[v as usize]);
+            let v = data[i];
+            fp = (fp << 1) + Wrapping(params.gear[v as usize]);
             if (fp.0 & MASK_S) == 0 {
                 self.reset();
                 return Some(i);
@@ -150,17 +176,17 @@ impl<'a> ChunkIncr for FastCdcIncr<'a> {
         }
 
         loop {
-            if gi >= self.params.max_size {
+            if gi >= params.max_size {
                 // no match found, emit fixed match at MAX_SIZE
                 self.reset();
                 return Some(i);
             }
-            if i >= src.len() {
+            if i >= data.len() {
                 break;
             }
 
-            let v = src[i];
-            fp = (fp << 1) + Wrapping(self.params.gear[v as usize]);
+            let v = data[i];
+            fp = (fp << 1) + Wrapping(params.gear[v as usize]);
             if (fp.0 & MASK_L) == 0 {
                 self.reset();
                 return Some(i);
@@ -175,5 +201,11 @@ impl<'a> ChunkIncr for FastCdcIncr<'a> {
         self.l = ge;
 
         None
+    }
+}
+
+impl<'a> ChunkIncr for FastCdcIncr<'a> {
+    fn push(&mut self, src: &[u8]) -> Option<usize> {
+        self.state.push(&self.params, src)
     }
 }
