@@ -161,4 +161,17 @@ proptest! {
         let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
         assert_eq!(s1, s2);
     }
+
+    #[test]
+    #[cfg(feature = "zstd")]
+    fn zstd_fce_self_consistent_with_varying_buf_size(
+        data in prop::collection::vec(0u8..=255u8, 0..100000),
+        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
+        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
+    {
+        let chunker = hash_roll::zstd::Zstd::default();
+        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
+        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
+        assert_eq!(s1, s2);
+    }
 }
