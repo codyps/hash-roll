@@ -88,6 +88,7 @@ impl Zpaq {
     }
 
     fn max_hash_from_fragment_ave(fragment_ave: u8) -> u32 {
+        assert!(fragment_ave <= 22);
         1 << (22 - fragment_ave)
         /*
          * go-dedup does this:
@@ -179,12 +180,12 @@ pub struct ZpaqIncr {
 #[derive(Default, Debug)]
 pub struct ZpaqSearchState {
     state: ZpaqHash,
-    offset: usize,
+    idx: u64,
 }
 
 impl ZpaqSearchState {
     fn feed(&mut self, v: u8) -> u32 {
-        self.offset += 1;
+        self.idx += 1;
         self.state.feed(v)
     }
 }
@@ -192,25 +193,30 @@ impl ZpaqSearchState {
 impl Chunk for Zpaq {
     type SearchState = ZpaqSearchState;
 
+    fn to_search_state(&self) -> Self::SearchState {
+        Default::default()
+    }
+
     fn find_chunk_edge(
         &self,
-        state: Option<Self::SearchState>,
+        state: &mut Self::SearchState,
         data: &[u8],
-    ) -> Result<usize, Self::SearchState> {
-        let mut hs = match state {
-            Some(v) => v,
-            None => Self::SearchState::default(),
-        };
-
-        for i in hs.offset..data.len() {
-            let h = hs.feed(data[i]);
-            if self.split_here(h, (i + 1) as u64) {
-                return Ok(i + 1);
+    ) -> (Option<usize>, usize) {
+        for i in 0..data.len() {
+            let h = state.feed(data[i]);
+            if self.split_here(h, (state.idx + 1) as u64) {
+                *state = self.to_search_state();
+                return (Some(i + 1), i + 1);
             }
         }
 
-        hs.offset = data.len();
-        Err(hs)
+        (None, data.len())
+    }
+}
+
+impl From<&Zpaq> for ZpaqSearchState {
+    fn from(_: &Zpaq) -> Self {
+        Default::default()
     }
 }
 

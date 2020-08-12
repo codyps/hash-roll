@@ -17,6 +17,7 @@ default = [
 	"gzip",
 	"mii",
 	"pigz",
+	"zpaq",
 	"zstd"
 ]
 

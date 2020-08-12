@@ -94,7 +94,6 @@
 use std::borrow::Borrow;
 use std::mem;
 
-//pub mod zpaq;
 pub mod bup;
 pub mod buzhash;
 pub mod buzhash_table;
@@ -106,6 +105,7 @@ pub mod mii;
 pub mod pigz;
 pub mod ram;
 pub mod range;
+pub mod zpaq;
 pub mod zstd;
 
 pub(crate) use range::RangeExt;
