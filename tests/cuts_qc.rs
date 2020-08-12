@@ -26,9 +26,16 @@ fn splits_fce<C: Chunk>(chunker: &C, buf: &[u8], buf_sizes: &[usize]) -> Vec<usi
         let buf_size = std::cmp::min(buf_size, buf.len() - curr_discard);
 
         let b = &buf[curr_discard..(buf_size + curr_discard)];
-        println!("{{ PRE: curr_discard: {}, buf_size: {}", curr_discard, buf_size);
+        println!(
+            "{{ PRE: curr_discard: {}, buf_size: {}",
+            curr_discard, buf_size
+        );
         let (split, discard_ct) = chunker.find_chunk_edge(&mut ss, b);
-        println!("}} POST: discard_ct: {}, next_discard: {}", discard_ct, curr_discard + discard_ct);
+        println!(
+            "}} POST: discard_ct: {}, next_discard: {}",
+            discard_ct,
+            curr_discard + discard_ct
+        );
 
         match split {
             Some(split_point) => {
@@ -52,7 +59,6 @@ fn splits_fce<C: Chunk>(chunker: &C, buf: &[u8], buf_sizes: &[usize]) -> Vec<usi
 
         curr_discard += discard_ct;
         println!("-- curr_discard = {}", curr_discard);
-
     }
 
     splits

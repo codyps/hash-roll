@@ -4,7 +4,7 @@
 //!
 //! A widely distributed patch for gzip adds a `--rsyncable` flag which causes `gzip` to split it's
 //! input on "stable" boundaries. This module impliments the algorithm used in that patch.
-//! 
+//!
 //! The same algorithm is used by the `rsyncrypto` project.
 //!
 //!  - No maximum block size is provided.
@@ -103,8 +103,7 @@ impl Chunk for GzipRsyncable {
 
 impl From<&GzipRsyncable> for GzipRsyncableIncr {
     fn from(src: &GzipRsyncable) -> Self {
-        src.clone()
-            .into()
+        src.clone().into()
     }
 }
 

@@ -53,7 +53,7 @@ impl crate::Chunk for Mii {
             Some(v) => {
                 state.reset();
                 (Some(v), v)
-            },
+            }
             None => (None, data.len()),
         }
     }

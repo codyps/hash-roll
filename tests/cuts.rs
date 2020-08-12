@@ -2,7 +2,12 @@ use hash_roll::{Chunk, ChunkIncr, ToChunkIncr};
 use rand::RngCore;
 use rand_pcg::Pcg64;
 
-fn cut_test_sz<C: Chunk + ToChunkIncr>(seed: u128, size: usize, chunker: C, expected_splits: &[usize]) {
+fn cut_test_sz<C: Chunk + ToChunkIncr>(
+    seed: u128,
+    size: usize,
+    chunker: C,
+    expected_splits: &[usize],
+) {
     let mut fill_rng = Pcg64::new(seed, 0xa02bdbf7bb3c0a7ac28fa16a64abf96);
     let mut buf = vec![0u8; size];
     fill_rng.fill_bytes(&mut buf);
@@ -79,10 +84,7 @@ fn mii_cuts_1() {
 #[cfg(feature = "bup")]
 #[test]
 fn bup_cuts_1() {
-    cut_test(0,
-        hash_roll::bup::RollSum::default(),
-        &[2600, 6245]
-    )
+    cut_test(0, hash_roll::bup::RollSum::default(), &[2600, 6245])
 }
 
 #[cfg(feature = "gzip")]

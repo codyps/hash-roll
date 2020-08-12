@@ -18,9 +18,8 @@
 //! emitted. In other words: the rolling hash isn't "reset" on block emittion. (Most chunking
 //! algorithms are reset on block emittion).
 use crate::{Chunk, ChunkIncr, ToChunkIncr};
-use std::num::Wrapping;
 use std::convert::TryInto;
-
+use std::num::Wrapping;
 
 const RSYNC_LENGTH: usize = 32;
 const PRIME_8_BYTES: Wrapping<u64> = Wrapping(0xCF1BBCDCB7A56463);
@@ -28,15 +27,15 @@ const ROLL_HASH_CHAR_OFFSET: Wrapping<u64> = Wrapping(10);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Zstd {
-    hit_mask: u64, 
+    hit_mask: u64,
     prime_power: u64,
 }
 
 impl Default for Zstd {
     fn default() -> Self {
-        // ../lib/compress/zstdmt_compress.c: jobSizeMB: 8, rsyncBits: 23, hitMask: 7fffff, primePower: f5507fe35f91f8cb 
+        // ../lib/compress/zstdmt_compress.c: jobSizeMB: 8, rsyncBits: 23, hitMask: 7fffff, primePower: f5507fe35f91f8cb
         Self::with_target_section_size(8 << 20)
-    }    
+    }
 }
 
 impl Zstd {
@@ -57,10 +56,12 @@ impl Zstd {
         assert_ne!(job_size_mb, 0);
         let rsync_bits = (job_size_mb.leading_zeros() ^ 31) + 20;
         let hit_mask = (1u64 << rsync_bits) - 1;
-        let prime_power = PRIME_8_BYTES.0.wrapping_pow((RSYNC_LENGTH - 1).try_into().unwrap());
+        let prime_power = PRIME_8_BYTES
+            .0
+            .wrapping_pow((RSYNC_LENGTH - 1).try_into().unwrap());
         Self {
             hit_mask,
-            prime_power
+            prime_power,
         }
     }
 }
@@ -151,7 +152,7 @@ impl ToChunkIncr for Zstd {
 
     fn to_chunk_incr(&self) -> Self::Incr {
         self.into()
-    }    
+    }
 }
 
 impl From<Zstd> for ZstdIncr {
@@ -159,7 +160,7 @@ impl From<Zstd> for ZstdIncr {
         Self {
             params,
             state: Default::default(),
-            window: vec![0;RSYNC_LENGTH].into_boxed_slice(),
+            window: vec![0; RSYNC_LENGTH].into_boxed_slice(),
             window_offs: 0,
             window_full: false,
             input_offs: 0,
@@ -169,8 +170,7 @@ impl From<Zstd> for ZstdIncr {
 
 impl From<&Zstd> for ZstdIncr {
     fn from(params: &Zstd) -> Self {
-        params.clone()
-            .into()
+        params.clone().into()
     }
 }
 
@@ -182,9 +182,9 @@ impl Chunk for Zstd {
     }
 
     fn find_chunk_edge(
-            &self,
-            state: &mut Self::SearchState,
-            data: &[u8],
+        &self,
+        state: &mut Self::SearchState,
+        data: &[u8],
     ) -> (Option<usize>, usize) {
         if state.offset < RSYNC_LENGTH {
             // push some data in
@@ -222,7 +222,8 @@ impl ChunkIncr for ZstdIncr {
     fn push(&mut self, data: &[u8]) -> Option<usize> {
         let use_len = if !self.window_full {
             let use_len = std::cmp::min(self.window.len() - self.window_offs, data.len());
-            self.window[self.window_offs..(self.window_offs + use_len)].copy_from_slice(&data[..use_len]);
+            self.window[self.window_offs..(self.window_offs + use_len)]
+                .copy_from_slice(&data[..use_len]);
             self.window_offs += use_len;
 
             if self.window_offs != self.window.len() {
@@ -241,16 +242,17 @@ impl ChunkIncr for ZstdIncr {
 
         // we have a full window, now rotate data through
         for (i, &v) in data[use_len..].iter().enumerate() {
-             let to_remove = self.window[self.window_offs];
-             let to_add = v;
-             self.state.rotate(to_remove, to_add, self.params.prime_power);
-             self.window[self.window_offs] = to_add;
-             self.window_offs = (self.window_offs + 1) % self.window.len();
+            let to_remove = self.window[self.window_offs];
+            let to_add = v;
+            self.state
+                .rotate(to_remove, to_add, self.params.prime_power);
+            self.window[self.window_offs] = to_add;
+            self.window_offs = (self.window_offs + 1) % self.window.len();
 
-             if self.state.at_split(&self.params) {
+            if self.state.at_split(&self.params) {
                 // NOTE: don't clear window
                 return Some(i + use_len);
-             }
+            }
         }
 
         None

@@ -1,4 +1,4 @@
-use crate::{Chunk, ToChunkIncr, ChunkIncr};
+use crate::{Chunk, ChunkIncr, ToChunkIncr};
 use std::fmt;
 use std::num::Wrapping;
 
@@ -30,9 +30,7 @@ impl ToChunkIncr for RollSum {
 
 impl RollSum {
     pub fn with_window(window_len: usize) -> Self {
-        Self {
-            window_len,
-        }
+        Self { window_len }
     }
 }
 
@@ -44,11 +42,10 @@ impl Chunk for RollSum {
     }
 
     fn find_chunk_edge(
-            &self,
-            state: &mut Self::SearchState,
-            data: &[u8],
-        ) -> (Option<usize>, usize) {
-
+        &self,
+        state: &mut Self::SearchState,
+        data: &[u8],
+    ) -> (Option<usize>, usize) {
         for i in state.offset..data.len() {
             let a = data[i];
             let d = if i >= self.window_len {
@@ -75,7 +72,7 @@ impl Chunk for RollSum {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RollSumState {
     // NOTE: in bup, these are `unsigned`, but masking indicates they'll end up being used as
-    // u16's. In `librsync`, these are `uint_fast16_t`, which end up being u32 on most platforms. 
+    // u16's. In `librsync`, these are `uint_fast16_t`, which end up being u32 on most platforms.
     // Both only require `u16` values to be represented. We use `u32` here as it's likely to be
     // somewhat more performant, but this should be examined
     s1: Wrapping<u32>,

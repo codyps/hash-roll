@@ -268,7 +268,7 @@ pub trait Chunk {
     /// `data` may be extended with additional data between calls to `find_chunk_edge()`. The bytes
     /// that were _previously_ in `data` and are not indicated by `discard_ct` must be preserved in
     /// the next `data` buffer called.
-    /// 
+    ///
     /// ```rust
     /// use hash_roll::Chunk;
     ///
@@ -331,11 +331,8 @@ pub trait Chunk {
     //     - Problem: user code to track indexing match up is somewhat difficult
     //     - mostly due to needing an extra index to track to handle the "last chunk" location not
     //     being the "slice we need to pass start"
-    fn find_chunk_edge(
-        &self,
-        state: &mut Self::SearchState,
-        data: &[u8],
-    ) -> (Option<usize>, usize);
+    fn find_chunk_edge(&self, state: &mut Self::SearchState, data: &[u8])
+        -> (Option<usize>, usize);
 }
 
 /// Implimented on types which can be converted to/can provide a [`ChunkIncr`] interface.
