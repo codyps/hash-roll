@@ -1,5 +1,10 @@
 #![cfg(feature = "fastcdc")]
 
+//! FastCDC is a chunking algorithm using some features from [Gear](super::gear)
+//!
+//! Reference:
+//!  - https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf
+
 use crate::{Chunk, ToChunkIncr, ChunkIncr};
 use std::fmt;
 use std::num::Wrapping;
@@ -17,8 +22,6 @@ const MASK_L: u64 = 0x0000d90003530000;
 ///  - Normal size: 8 KiB
 ///  - internal 64-bit gear table: [`super::gear_table::GEAR_64`]
 ///
-/// Reference:
-///  - https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf
 #[derive(Clone, Copy)]
 pub struct FastCdc<'a> {
     gear: &'a [u64; 256],

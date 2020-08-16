@@ -140,12 +140,11 @@ pub trait ChunkIncr {
     /// impossible (as it is permissible to pass 1 byte at a time).
     fn push(&mut self, data: &[u8]) -> Option<usize>;
 
+
     /// Given a [`ChunkIncr`] and a single slice, return a list of slices chunked by the chunker.
-    /// Does not return the remainder (if any) in the iteration. Use [`IterSlices::take_rem()`] or
-    /// [`IterSlices::into_parts()`] to get the remainder.
     ///
-    /// Note that this is a non-incrimental interface. Calling this on an already fed chunker or using
-    /// this multiple times on the same chunker may provide unexpected results
+    /// Will always return enough slices to form the entire content of `data`, even if the trailing
+    /// part of data is not a chunk (ie: does not end on a chunk boundary)
     fn iter_slices<'a>(self, data: &'a [u8]) -> IterSlices<'a, Self>
     where
         Self: std::marker::Sized,
@@ -155,18 +154,34 @@ pub trait ChunkIncr {
             chunker: self,
         }
     }
+
+    /// Given a [`ChunkIncr`] and a single slice, return a list of slices chunked by the chunker.
+    /// Does not return the remainder (if any) in the iteration. Use [`IterSlices::take_rem()`] or
+    /// [`IterSlices::into_parts()`] to get the remainder.
+    ///
+    /// Note that this is a non-incrimental interface. Calling this on an already fed chunker or using
+    /// this multiple times on the same chunker may provide unexpected results
+    fn iter_slices_strict<'a>(self, data: &'a [u8]) -> IterSlicesStrict<'a, Self>
+    where
+        Self: std::marker::Sized,
+    {
+        IterSlicesStrict {
+            rem: data,
+            chunker: self,
+        }
+    }
 }
 
-/// Returned by [`ChunkIncr::iter_slices()`]
+/// Returned by [`ChunkIncr::iter_slices_strict()`]
 ///
 /// Always emits _complete_ slices durring iteration.
 #[derive(Debug)]
-pub struct IterSlices<'a, C: ChunkIncr> {
+pub struct IterSlicesStrict<'a, C: ChunkIncr> {
     rem: &'a [u8],
     chunker: C,
 }
 
-impl<'a, C: ChunkIncr> IterSlices<'a, C> {
+impl<'a, C: ChunkIncr> IterSlicesStrict<'a, C> {
     /// Take the remainder from this iterator. Leaves an empty slice in it's place.
     pub fn take_rem(&mut self) -> &'a [u8] {
         let mut l: &[u8] = &[];
@@ -182,7 +197,7 @@ impl<'a, C: ChunkIncr> IterSlices<'a, C> {
     }
 }
 
-impl<'a, C: ChunkIncr> Iterator for IterSlices<'a, C> {
+impl<'a, C: ChunkIncr> Iterator for IterSlicesStrict<'a, C> {
     type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -197,16 +212,25 @@ impl<'a, C: ChunkIncr> Iterator for IterSlices<'a, C> {
     }
 }
 
-/// Returned by [`ChunkIncr::iter_slices_partial()`]
+/// Returned by [`ChunkIncr::iter_slices()`]
 ///
 /// When it runs out of data, it returns the remainder as the last element of the iteration
 #[derive(Debug)]
-pub struct IterSlicesPartial<'a, C: ChunkIncr> {
+pub struct IterSlices<'a, C: ChunkIncr> {
     rem: &'a [u8],
     chunker: C,
 }
 
-impl<'a, C: ChunkIncr> Iterator for IterSlicesPartial<'a, C> {
+impl<'a, C: ChunkIncr> IterSlices<'a, C> {
+    /// Obtain the internals
+    ///
+    /// Useful, for example, after iteration stops to obtain the remaining slice.
+    pub fn into_parts(self) -> (C, &'a [u8]) {
+        (self.chunker, self.rem)
+    }
+}
+
+impl<'a, C: ChunkIncr> Iterator for IterSlices<'a, C> {
     type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -316,7 +340,7 @@ pub trait Chunk {
     // example of an algorithm that needs this
     //
     // Potential pitfal: for better performance, keeping the return value small is a very good
-    // idea. By returning ~4x64, we are might be less performant depending on the ABI selected.
+    // idea. By returning ~2x64+32, we are might be less performant depending on the ABI selected.
     //
     // Consider if result should return `(&[u8], &[u8])` instead of an index (which would then be
     // given to `.split_at()`
@@ -354,173 +378,4 @@ pub trait ToChunkIncr {
     /// minor computation on its fields and may allocate some memory for storing additional state
     /// needed for incrimental computation.
     fn to_chunk_incr(&self) -> Self::Incr;
-}
-
-/// `Splitter`s define how to split a stream of bytes into chunks. They are instances of CDC
-/// algorthims with their parameters.
-///
-pub trait Splitter {
-    /// Find the location (if any) to split `data` based on this splitter.
-    ///
-    /// Note: this doesn't preserve any intermediate state. Having intermediate state may be useful
-    /// to have if you plan on extending the input data whan a split point is not found.
-    ///
-    /// ## For implimenting `Splitter`
-    ///
-    /// The provided implimentation uses [`Splitter::split`](#method.split).
-    /// You must impliment either this function or `split`.
-    fn find_chunk_edge(&self, data: &[u8]) -> usize {
-        self.split(data).0.len()
-    }
-
-    ///
-    /// Split data into 2 pieces using a given splitter.
-    ///
-    /// It is expected that in most cases the second element of the return value will be split
-    /// further by calling this function again.
-    ///
-    /// Note: this doesn't preserve any intermediate state. Having intermediate state may be useful
-    /// to have if you plan on extending the input data whan a split point is not found.
-    ///
-    /// *Implimentor's Note*
-    ///
-    /// The provided implimentation uses [`find_chunk_edge`](#method.find_chunk_edge).
-    /// You must impliment either this function or `find_chunk_edge`.
-    ///
-    fn split<'b>(&self, data: &'b [u8]) -> (&'b [u8], &'b [u8]) {
-        let l = self.find_chunk_edge(data);
-        data.split_at(l)
-    }
-
-    /// Consumes the iterator of bytes `iter`, and returns a vector of the next chunk (if any)
-    ///
-    /// See the iterator generator functions [`into_vecs`](#method.into_vecs) and
-    /// [`as_vecs`](#method.as_vecs) which provide a more ergonomic interface to this.
-    ///
-    /// Note: performance of this function is _really_ bad. This iterating over bytes and copying
-    /// every byte into a `Vec` is not cheap.
-    ///
-    /// Note: this doesn't preserve any intermediate state. Having intermediate state may be useful
-    /// to have if you plan on extending the input data whan a split point is not found.
-    ///
-    fn next_iter<T: Iterator<Item = u8>>(&self, iter: T) -> Option<Vec<u8>>;
-
-    /**
-     * Create an iterator over slices from a slice and a splitter.
-     * The splitter is consumed.
-     */
-    fn into_slices<'a>(self, data: &'a [u8]) -> SplitterSlices<'a, Self>
-    where
-        Self: Sized,
-    {
-        SplitterSlices::from(self, data)
-    }
-
-    fn as_slices<'a>(&'a self, data: &'a [u8]) -> SplitterSlices<'a, &Self>
-    where
-        Self: Sized,
-    {
-        SplitterSlices::from(self, data)
-    }
-
-    ///
-    /// Create an iterator of `Vec<u8>` from an input Iterator of bytes.
-    /// The splitter is consumed.
-    ///
-    fn into_vecs<T: Iterator<Item = u8>>(self, data: T) -> SplitterVecs<T, Self>
-    where
-        Self: Sized,
-    {
-        SplitterVecs::from(self, data)
-    }
-
-    fn as_vecs<T: Iterator<Item = u8>>(&self, data: T) -> SplitterVecs<T, &Self>
-    where
-        Self: Sized,
-    {
-        SplitterVecs::from(self, data)
-    }
-}
-
-impl<'a, S: Splitter + ?Sized> Splitter for &'a S {
-    fn split<'b>(&self, data: &'b [u8]) -> (&'b [u8], &'b [u8]) {
-        (*self).split(data)
-    }
-
-    fn next_iter<T: Iterator<Item = u8>>(&self, iter: T) -> Option<Vec<u8>> {
-        (*self).next_iter(iter)
-    }
-}
-
-/// Iterator over slices emitted from a splitter
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SplitterSlices<'a, T: Splitter + 'a> {
-    parent: T,
-    d: &'a [u8],
-}
-
-impl<'a, T: Splitter> SplitterSlices<'a, T> {
-    pub fn from(i: T, d: &'a [u8]) -> Self {
-        SplitterSlices { parent: i, d }
-    }
-}
-
-impl<'a, T: Splitter> Iterator for SplitterSlices<'a, T> {
-    type Item = &'a [u8];
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.d.is_empty() {
-            return None;
-        }
-
-        let (a, b) = self.parent.borrow().split(self.d);
-        if a.is_empty() {
-            /* FIXME: this probably means we won't emit an empty slice */
-            self.d = a;
-            Some(b)
-        } else {
-            self.d = b;
-            Some(a)
-        }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        /* At most, we'll end up returning a slice for every byte, +1 empty slice */
-        if self.d.is_empty() {
-            (0, Some(0))
-        } else {
-            (1, Some(self.d.len() + 1))
-        }
-    }
-}
-
-/// Iterator over vecs emitted from a splitter
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SplitterVecs<T, P: Splitter> {
-    parent: P,
-    d: T,
-}
-
-impl<T, P: Splitter> SplitterVecs<T, P> {
-    pub fn from(i: P, d: T) -> Self {
-        SplitterVecs { parent: i, d }
-    }
-}
-
-impl<T: Iterator<Item = u8>, P: Splitter> Iterator for SplitterVecs<T, P> {
-    type Item = Vec<u8>;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.parent.borrow().next_iter(&mut self.d)
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        /* At most, we'll end up returning a vec for every byte, +1 empty slice */
-        let (a, b) = self.d.size_hint();
-        (a, if let Some(c) = b { Some(c + 1) } else { None })
-    }
 }

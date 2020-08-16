@@ -46,7 +46,7 @@
 //!
 //! Trigger splits when H(n) == 0
 
-use crate::{Chunk, ChunkIncr, Splitter, ToChunkIncr};
+use crate::{Chunk, ChunkIncr, ToChunkIncr};
 use std::collections::VecDeque;
 use std::num::Wrapping;
 
@@ -204,41 +204,5 @@ impl ChunkIncr for GzipRsyncableIncr {
         }
 
         None
-    }
-}
-
-impl Splitter for GzipRsyncable {
-    fn find_chunk_edge<'a, 'b>(&'a self, data: &'b [u8]) -> usize {
-        let mut hs = GzipRsyncableState::default();
-
-        let mut l = 0;
-        for (i, &v) in data.iter().enumerate() {
-            if hs.add(data, self, i, v) {
-                l = i + 1;
-                break;
-            }
-        }
-
-        l
-    }
-
-    fn next_iter<'a, T: Iterator<Item = u8>>(&'a self, iter: T) -> Option<Vec<u8>> {
-        let mut hs = GzipRsyncableState::default();
-
-        let a = self.window_len + self.window_len / 2;
-        let mut data = Vec::with_capacity(a);
-        for (i, v) in iter.enumerate() {
-            data.push(v);
-
-            if hs.add(&data, self, i, v) {
-                return Some(data);
-            }
-        }
-
-        if data.is_empty() {
-            None
-        } else {
-            Some(data)
-        }
     }
 }
