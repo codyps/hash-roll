@@ -189,6 +189,39 @@ fn pigz_cuts_0() {
     )
 }
 
+/*
+ * 0
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 0, tss: 8388608 -> (131072, 0) 
+ * 1
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 131072, tss: 8388608 -> (131072, 0) 
+ * 2
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 262144, tss: 8388608 -> (131072, 0) 
+ * 3
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 393216, tss: 8388608 -> (131072, 0) 
+ * 4
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 524288, tss: 8388608 -> (131072, 0) 
+ * 5
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 655360, tss: 8388608 -> (131072, 0) 
+ * 6
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 786432, tss: 8388608 -> (131072, 0) 
+ 7
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 917504, tss: 8388608 -> (131072, 0) 
+ 8
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 1048576, tss: 8388608 -> (131072, 0) 
+ 9
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 1179648, tss: 8388608 -> (131072, 0) 
+ 10
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 1310720, tss: 8388608 -> (131072, 0) 
+ 11
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 1441792, tss: 8388608 -> (131072, 0) 
+ 12
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 1572864, tss: 8388608 -> (87647, 1) 
+ 13
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (87647, 131072), inbf: 0, tss: 8388608 -> (43425, 0) 
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 43425, tss: 8388608 -> (131072, 0) 
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 174497, tss: 8388608 -> (131072, 0) 
+../lib/compress/zstdmt_compress.c: findSynchronizationPoint: input: (0, 131072), inbf: 305569, tss: 8388608 -> (131072, 0)
+ */
 #[cfg(feature = "zstd")]
 #[test]
 fn zstd_cuts_0_2mb() {
@@ -196,7 +229,8 @@ fn zstd_cuts_0_2mb() {
         0,
         1024 * 1024 * 2,
         hash_roll::zstd::Zstd::default(),
-        &[1660511],
+        //&[1660511],
+        &[12 * 131072 + 87647],
     )
 }
 

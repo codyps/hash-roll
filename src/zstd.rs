@@ -2,8 +2,11 @@
 
 //! zstd's `--rsyncable` option performs content defined chunking
 //!
-//! **WARNING: NOT VALIDATED AGAINST ZSTD. RESULTS MAY NOT MATCH ZSTD RSYNCABLE. OUTPUT MAY CHANGE
-//! IN THE FUTURE AS BUGS ARE FIXED**
+//! This has been minimally validated to match the implimentation from zstd, with the following
+//! caveats:
+//!
+//!   - Maximum chunk size is not implimented
+//!   - Only 1 test case with a single chunk edge (ie: 2 chunks) has been tested
 //!
 //! It uses a internal [rolling
 //! hash](https://github.com/facebook/zstd/blob/01261bc8b6fcfc77801788f8b1e2a2e5dd2e8e25/lib/compress/zstd_compress_internal.h#L658-L698)

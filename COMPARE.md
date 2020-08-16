@@ -12,7 +12,8 @@
    - doi:10.1016/j.future.2017.02.013 
  - MII (minimal incrimental interval)
    - doi:10.1109/access.2019.2926195 
- - 
+ - [TTTD](https://scholarworks.sjsu.edu/cgi/viewcontent.cgi?referer=&httpsredir=1&article=1041&context=etd_projects)
+ - [FBC](doi:10.1109/mascots.2010.37)
 
 # Algorithm Points of Comparison
 

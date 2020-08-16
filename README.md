@@ -9,3 +9,14 @@ defined chunking. Also provides implimentations of a number of content defined
 chunking algorithms.
 
 ## [Comparison of the Chunking options avaliable in Rust](COMPARE.md)
+
+
+## Metrics
+
+ - DER: duplicate elimination ratio
+
+## CDC References
+
+ - https://www.usenix.org/legacy/events/fast10/tech/full_papers/kruus.pdf
+
+

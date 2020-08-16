@@ -1,6 +1,6 @@
 [package]
 name = "hash-roll"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Cody P Schafer <dev@codyps.com>"]
 description = "Rolling hashes & Content Defined Chunking (cdc)"
 keywords = [ "hash", "rolling", "incremental", "split" , "cdc"]
