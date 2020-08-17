@@ -130,7 +130,7 @@ proptest! {
         buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
         buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
     {
-        let chunker = hash_roll::zpaq::Zpaq::with_average_size_pow_2(3);
+        let chunker = hash_roll::zpaq::Zpaq::with_average_size_pow_2(13);
         let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
         let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
         assert_eq!(s1, s2);

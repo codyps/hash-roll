@@ -70,7 +70,7 @@ impl Zpaq {
                     Bound::Excluded(i) => *i + 1,
                     Bound::Unbounded => {
                         /* welp, lets use the default */
-                        return 6;
+                        return 16;
                     }
                 }
             }
@@ -81,8 +81,9 @@ impl Zpaq {
 
     /* these are based on the zpaq (not go-dedup) calculations */
     fn range_from_fragment_ave(fragment_ave: u8) -> impl RangeBounds<u64> {
-        assert!(fragment_ave <= 22);
-        64 << fragment_ave..8128 << fragment_ave
+        assert!(fragment_ave <= 32);
+        assert!(fragment_ave >= 10);
+        64 << (fragment_ave - 10)..8128 << fragment_ave
     }
 
     fn range_from_max(max: u64) -> impl RangeBounds<u64> {
@@ -90,8 +91,8 @@ impl Zpaq {
     }
 
     fn max_hash_from_fragment_ave(fragment_ave: u8) -> u32 {
-        assert!(fragment_ave <= 22);
-        1 << (22 - fragment_ave)
+        assert!(fragment_ave <= 32);
+        1 << (32 - fragment_ave)
         /*
          * go-dedup does this:
          * (22f64 - fragment_ave).exp2() as u32
@@ -163,7 +164,7 @@ impl Default for Zpaq {
      * Average size is 65536 bytes (64KiB), max is 520192 bytes (508KiB), min is 4096 bytes (4KiB)
      */
     fn default() -> Self {
-        Self::with_average_size_pow_2(6)
+        Self::with_average_size_pow_2(16)
     }
 }
 

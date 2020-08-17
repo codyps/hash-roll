@@ -163,7 +163,7 @@ fn zpaq_cuts_0() {
     //     zpaq a foo.zpaq ~/p/hash-roll/test_data_0.bin -fragment 3
     cut_test(
         0,
-        hash_roll::zpaq::Zpaq::with_average_size_pow_2(3),
+        hash_roll::zpaq::Zpaq::with_average_size_pow_2(13),
         &[10785, 6329, 1287, 860, 4716, 7419],
     )
 }
@@ -177,7 +177,7 @@ fn zpaq_cuts_3() {
     //     zpaq a foo.zpaq ~/p/hash-roll/test_data_3.bin -fragment 3
     cut_test(
         3,
-        hash_roll::zpaq::Zpaq::with_average_size_pow_2(3),
+        hash_roll::zpaq::Zpaq::with_average_size_pow_2(13),
         &[16353, 2334, 970, 5326, 1557],
     )
 }
