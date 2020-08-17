@@ -5,7 +5,7 @@
 //! Reference:
 //!  - https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf
 
-use crate::{Chunk, ToChunkIncr, ChunkIncr};
+use crate::{Chunk, ChunkIncr, ToChunkIncr};
 use std::fmt;
 use std::num::Wrapping;
 
@@ -70,7 +70,11 @@ impl<'a> Chunk for FastCdc<'a> {
         Default::default()
     }
 
-    fn find_chunk_edge(&self, state: &mut Self::SearchState, data: &[u8]) -> (Option<usize>, usize) {
+    fn find_chunk_edge(
+        &self,
+        state: &mut Self::SearchState,
+        data: &[u8],
+    ) -> (Option<usize>, usize) {
         match state.push(self, data) {
             Some(i) => (Some(i + 1), i + 1),
             None => (None, data.len()),

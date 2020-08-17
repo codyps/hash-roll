@@ -52,7 +52,11 @@ impl<'a> Chunk for Gear32<'a> {
         Default::default()
     }
 
-    fn find_chunk_edge(&self, state: &mut Self::SearchState, data: &[u8]) -> (Option<usize>, usize) {
+    fn find_chunk_edge(
+        &self,
+        state: &mut Self::SearchState,
+        data: &[u8],
+    ) -> (Option<usize>, usize) {
         for i in 0..data.len() {
             if state.push(self, data[i]) {
                 *state = self.to_search_state();
@@ -78,7 +82,7 @@ impl<'a> From<&Gear32<'a>> for GearIncr32<'a> {
             params: params.clone(),
             state: Default::default(),
         }
-    } 
+    }
 }
 
 impl<'a> fmt::Debug for Gear32<'a> {

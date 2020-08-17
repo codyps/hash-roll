@@ -8,7 +8,7 @@
 //!
 //! doi:10.1016/j.future.2017.02.013
 //!
-use crate::{Chunk, ToChunkIncr, ChunkIncr};
+use crate::{Chunk, ChunkIncr, ToChunkIncr};
 
 /// Parameters for the Rapid Asymmetric Maximum (RAM) chunking algorithm
 ///
@@ -26,9 +26,7 @@ impl Ram {
     ///
     /// `w` is also the minimum block size
     pub fn with_w(w: u64) -> Self {
-        Self {
-            w,
-        }
+        Self { w }
     }
 }
 
@@ -39,10 +37,14 @@ impl Chunk for Ram {
         Default::default()
     }
 
-    fn find_chunk_edge(&self, state: &mut Self::SearchState, data: &[u8]) -> (Option<usize>, usize) {
+    fn find_chunk_edge(
+        &self,
+        state: &mut Self::SearchState,
+        data: &[u8],
+    ) -> (Option<usize>, usize) {
         match state.push(self, data) {
             Some(i) => (Some(i + 1), i + 1),
-            None => (None, data.len())
+            None => (None, data.len()),
         }
     }
 }
@@ -104,6 +106,6 @@ pub struct RamIncr {
 
 impl ChunkIncr for RamIncr {
     fn push(&mut self, data: &[u8]) -> Option<usize> {
-        self.state.push(&self.params, data) 
+        self.state.push(&self.params, data)
     }
 }

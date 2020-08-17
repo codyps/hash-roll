@@ -139,7 +139,6 @@ pub trait ChunkIncr {
     /// impossible (as it is permissible to pass 1 byte at a time).
     fn push(&mut self, data: &[u8]) -> Option<usize>;
 
-
     /// Given a [`ChunkIncr`] and a single slice, return a list of slices chunked by the chunker.
     ///
     /// Will always return enough slices to form the entire content of `data`, even if the trailing
