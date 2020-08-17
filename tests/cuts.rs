@@ -2,15 +2,20 @@ use hash_roll::{Chunk, ChunkIncr, ToChunkIncr};
 use rand::RngCore;
 use rand_pcg::Pcg64;
 
+fn test_data(seed: u128, size: usize) -> Vec<u8> {
+    let mut fill_rng = Pcg64::new(seed, 0xa02bdbf7bb3c0a7ac28fa16a64abf96);
+    let mut buf = vec![0u8; size];
+    fill_rng.fill_bytes(&mut buf);
+    buf
+}
+
 fn cut_test_incr<C: ChunkIncr>(
     seed: u128,
     size: usize,
     chunker: C,
     expected_splits: &[usize],
 ) {
-    let mut fill_rng = Pcg64::new(seed, 0xa02bdbf7bb3c0a7ac28fa16a64abf96);
-    let mut buf = vec![0u8; size];
-    fill_rng.fill_bytes(&mut buf);
+    let buf = test_data(seed, size);
 
     // Note: this is only basic equivalance checking via byte-at-a-time. More full equivalance
     // checking will be done via quickcheck tests.
@@ -41,9 +46,7 @@ fn cut_test_sz<C: Chunk + ToChunkIncr>(
     chunker: C,
     expected_splits: &[usize],
 ) {
-    let mut fill_rng = Pcg64::new(seed, 0xa02bdbf7bb3c0a7ac28fa16a64abf96);
-    let mut buf = vec![0u8; size];
-    fill_rng.fill_bytes(&mut buf);
+    let buf = test_data(seed, size);
 
     // Note: this doesn't validate SearchState at all
     let mut splits = Vec::with_capacity(expected_splits.len());
