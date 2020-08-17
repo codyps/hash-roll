@@ -91,7 +91,6 @@
  * rollsum of librsync
  */
 
-use std::borrow::Borrow;
 use std::mem;
 
 pub mod bup;
