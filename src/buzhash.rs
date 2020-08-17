@@ -8,6 +8,11 @@
 //!     - via [silvasur/buzhash](https://github.com/silvasur/buzhash)
 //!   - [attic-labs/nom](https://github.com/attic-labs/noms/blob/26620a34bc8c95812037588869d4790b5581b34d/go/types/rolling_value_hasher.go#L15-L21)
 //!
+//! Documentation:
+//!
+//! - [Recursive Hashing Functions for n-Grams, JONATHAN D. COHEN](https://www.csee.umbc.edu/courses/graduate/676/recursivehashingp291-cohen)
+//! - ["Cyclic Polynomial", Rolling Hashes, Wikipedia](https://en.wikipedia.org/wiki/Rolling_hash#cite_ref-3)
+//!
 use crate::{Chunk, ChunkIncr, ToChunkIncr};
 use std::fmt;
 use std::num::Wrapping;
