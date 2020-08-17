@@ -1,24 +1,53 @@
 [package]
 name = "hash-roll"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Cody P Schafer <dev@codyps.com>"]
-description = "A selection of rolling hashes"
-keywords = [ "hash", "rolling", "incremental", "split" ]
+description = "Rolling hashes & Content Defined Chunking (cdc)"
+keywords = [ "hash", "rolling", "incremental", "split" , "cdc"]
 license = "AGPL-3.0"
 repository = "https://github.com/jmesmon/hash-roll.git"
 documentation = "https://docs.rs/hash-roll"
-include = ["Cargo.toml", "**/*.rs", "README.md"]
+include = ["Cargo.toml", "**/*.rs", "README.md", "COMPARE.md"]
+edition = "2018"
 
 [features]
-# Enable things that require nightly rust (benchmarks)
-nightly = []
+default = [
+	"bup",
+	"buzhash",
+	"fastcdc",
+	"gear",
+	"gzip",
+	"mii",
+	"pigz",
+	"ram",
+	"zpaq",
+	"zstd"
+]
+
+bup = []
+buzhash = []
+fastcdc = []
+gear = []
+gzip = []
+mii = []
+pigz = []
+ram = []
+zpaq = []
+zstd = []
 
 [dependencies]
 fmt-extra = "0.2"
+#circbuf = "0.1.4"
 
 [dev-dependencies]
-rand = "0.5"
+rand = "0.7.3"
 histogram = "0.6"
+quickcheck = "0.9"
 rollsum = "0.2"
-quickcheck = "0.8"
+criterion = "0.3"
+rand_pcg = "0.2.1"
+proptest = "0.10.0"
 
+[[bench]]
+name = "compare"
+harness = false

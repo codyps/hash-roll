@@ -1,19 +1,74 @@
-#![cfg_attr(all(feature = "nightly", test), feature(test))]
+//! hash-roll provides various content defined chunking algorithms
+//!
+//! Content defined chunking (CDC) algorithms are algorithms that examine a stream of input bytes (often
+//! represented as a slice like `[u8]`, and provide locations within that input stream to split or
+//! chunk the stream into parts.
+//!
+//! CDC algorithms generally try to optimize for the following:
+//!
+//!  1. Processing speed (ie: bytes/second)
+//!  2. Stability in split locations even when insertions/deletions of bytes occur
+//!  3. Reasonable distributions of chunk lengths
+//!
+//! ## API Concepts
+//!
+//! - Configured Algorithm Instance (impliments [`Chunk`]). Normally named plainly (like
+//!   [`Bup`]). These can be thought of as "parameters" for an algorithm.
+//! - Incrimental (impliments [`ChunkIncr`]). Normally named with `Incr` suffix.
+//!
+//! Because of the various ways one might use a CDC, and the different CDC algorithm
+//! characteristics, hash-roll provides a few ways to use them.
+//!
+//! Configured Algorithm Instances are created from the set of configuration needed for a given
+//! algorithm. For example, this might mean configuring a window size or how to decide where to
+//! split. These don't include any mutable data, in other words: they don't keep track of what data
+//! is given to them. Configured Algorithm Instances provide the all-at-once APIs, as well as
+//! methods to obtain other kinds of APIs, like incrimental style apis.
+//!
+//! ## CDC Algorithms and Window Buffering
+//!
+//! Different CDC algorithms have different constraints about how they process data. Notably, some
+//! require a large amount of previous processed data to process additional data. This "large
+//! amount of previously processed data" is typically referred to as the "window". That said, note
+//! that some CDC algorithms that use a window concept don't need previously accessed data.
+//!
+//! For the window-buffering algorithms, their is an extra cost to certain types of API
+//! implimentations. The documentation will note when these occur and suggest alternatives.
+//!
+//! Generally, CDC interfaces that are incrimental will be slower for window-buffering algorithms.
+//! Using an explicitly allocating interface (which emits `Vec<u8>` or `Vec<Vec<u8>>`) will have no
+//! worse performance that the incrimental API, but might be more convenient. Using an all-at-once
+//! API will provide the best performance due to not requiring any buffering (the input data can be
+//! used directly).
+//!
+//! ## Use Cases that drive API choices
+//!
+//!  - accumulate vecs, emits vecs
+//!    - incrimental: yes
+//!    - input: `Vec<u8>`
+//!    - internal state: `Vec<Vec<u8>>`
+//!    - output: `Vec<Vec<u8>>`
+//!
+//!  - stream data through
+//!    - incrimenal: yes
+//!    - input: `&[u8]`
+//!
+//!  - mmap (or read entire) file, emit
+//!    - incrimenal: no
+//!    - input: `&[u8]`
+//!    - output: `&[u8]`
 
-#[cfg(all(feature = "nightly", test))]
-extern crate test;
-#[cfg(all(feature = "nightly", test))]
-extern crate histogram;
+// # API Design Notes
+//
+// ## What methods should be in a trait? What should be in wrapper structs?
+//
+//  - place methods that might have more optimized variants, but can have common implimentations,
+//    in a trait. This notably affects window-buffering differences: it's always possible to
+//    impliment all-at-once processing using incrimental interfaces that internally buffer, but
+//    it's much more efficient for window-buffering algorithms to provide implimentations that know
+//    how to look into the input data directly.
 
-#[cfg(test)]
-extern crate rand;
-#[cfg(test)]
-extern crate rollsum;
-#[cfg(test)]
-extern crate quickcheck;
-
-extern crate fmt_extra;
-
+#![warn(rust_2018_idioms, missing_debug_implementations)]
 /* TODO: Rabin-Karp
  * H = c_1 * a ** (k-1) + c_2 * a ** (k-2) ... + c_k * a ** 0
  * where:
@@ -36,337 +91,289 @@ extern crate fmt_extra;
  * rollsum of librsync
  */
 
-/*
- * TODO:
- *
- * - GearCDC
- * - FastCDC
- *
- */
-
-use std::borrow::Borrow;
+use std::mem;
 
 pub mod bup;
-pub mod zpaq;
-pub mod rsyncable;
 pub mod buzhash;
-pub mod gear;
+pub mod buzhash_table;
 pub mod fastcdc;
+pub mod gear;
 pub mod gear_table;
+pub mod gzip;
+pub mod mii;
+pub mod pigz;
+pub mod ram;
+pub mod range;
+pub mod zpaq;
+pub mod zstd;
 
-pub use bup::Bup;
-pub use zpaq::Zpaq;
-pub use rsyncable::Rsyncable;
+pub(crate) use range::RangeExt;
 
-#[cfg(all(feature = "nightly", test))]
-mod bench;
-
-/// Something that takes a stream of bytes (represented by a series of slices) and identifies
-/// indexes to split on.
-pub trait Split2 {
+/// Accept incrimental input and provide indexes of split points
+///
+/// Compared to [`Chunk`], [`ChunkIncr`] allows avoiding having to buffer all input data in memory,
+/// and avoids the need to use a single buffer for storing the input data (even if all data is in
+/// memory).
+///
+/// Data fed into a given [`ChunkIncr`] instance is considered to be part of the same
+/// data "source". This affects chunking algorithms that maintain some state between chunks
+/// (like `ZstdRsyncable` does). If you have multiple "sources", one should obtain new instances of
+/// [`ChunkIncr`] for each of them (typically via [`ToChunkIncr`]).
+///
+/// Note that for some splitting/chunking algorithms, the incrimental api will be less efficient
+/// compared to the non-incrimental API. In particular, algorithms like [`Rsyncable`] that require
+/// the use of previously examined data to shift their "window" (resulting in needing a circular
+/// buffer which all inputed data passes through) will perform more poorly using [`ChunkIncr`]
+/// compared with non-incrimental interfaces
+pub trait ChunkIncr {
     /// The data "contained" within a implimentor of this trait is the history of all data slices
     /// passed to feed.
     ///
     /// In other words, all previous data (or no previous data) may be used in determining the
     /// point to split.
     ///
-    /// Returns 0 if the data has no split point. Otherwise, returns an index in the most recently
-    /// passed `data`.
+    /// Returns None if the data has no split point.
+    /// Otherwise, returns an index in the most recently passed `data`.
     ///
     /// Note that returning the index in the current slice makes most "look-ahead" splitting
     /// impossible (as it is permissible to pass 1 byte at a time).
-    fn push(&mut self, data: &[u8]) -> usize;
-}
+    fn push(&mut self, data: &[u8]) -> Option<usize>;
 
-/// An object with transforms a stream of bytes into chunks, potentially by examining the bytes
-pub trait Splitter
-{
-    /**
-     * Find the location (if any) to split `data` based on this splitter.
-     *
-     * FIXME: discards internal state when the edge is not found, meaning a user of this API would
-     * have to re-process the entire thing.
-     *
-     * *Implimentor's Note*
-     *
-     * The provided implimentation uses [`Splitter::split`](#method.split).
-     * You must impliment either this function or `split`.
-     */
-    fn find_chunk_edge(&self, data: &[u8]) -> usize {
-        self.split(data).0.len()
-    }
-
-    /**
-     * Split data into 2 pieces using a given splitter.
-     *
-     * It is expected that in most cases the second element of the return value will be split
-     * further by calling this function again.
-     *
-     * FIXME: discards internal state when the edge is not found, meaning a user of this API would
-     * have to re-process the entire thing.
-     *
-     * *Implimentor's Note*
-     *
-     * The provided implimentation uses [`find_chunk_edge`](#method.find_chunk_edge).
-     * You must impliment either this function or `find_chunk_edge`.
-     */
-    fn split<'b>(&self, data: &'b [u8]) -> (&'b[u8], &'b[u8]) {
-        let l = self.find_chunk_edge(data);
-        data.split_at(l)
-    }
-
-    /**
-     * Return chunks from a given iterator, split according to the splitter used.
-     *
-     * See the iterator generator functions [`into_vecs`](#method.into_vecs) and
-     * [`as_vecs`](#method.as_vecs) which provide a more ergonomic interface to this.
-     *
-     * FIXME: discards internal state when the edge is not found at the end of the input iterator,
-     * meaning a user of this API would have to re-process the entire thing.
-     *
-     */
-    fn next_iter<T: Iterator<Item=u8>>(&self, iter: T) -> Option<Vec<u8>>;
-
-    /**
-     * Create an iterator over slices from a slice and a splitter.
-     * The splitter is consumed.
-     */
-    fn into_slices<'a>(self, data: &'a [u8]) -> SplitterSlices<'a, Self>
-        where Self: Sized
+    /// Given a [`ChunkIncr`] and a single slice, return a list of slices chunked by the chunker.
+    ///
+    /// Will always return enough slices to form the entire content of `data`, even if the trailing
+    /// part of data is not a chunk (ie: does not end on a chunk boundary)
+    fn iter_slices<'a>(self, data: &'a [u8]) -> IterSlices<'a, Self>
+    where
+        Self: std::marker::Sized,
     {
-        SplitterSlices::from(self, data)
-    }
-
-    fn as_slices<'a>(&'a self, data: &'a [u8]) -> SplitterSlices<'a, &Self>
-        where Self: Sized
-    {
-        SplitterSlices::from(self, data)
-    }
-
-    /**
-     * Create an iterator of `Vec<u8>` from an input Iterator of bytes.
-     * The splitter is consumed.
-     */
-    fn into_vecs<'a, T: Iterator<Item=u8>>(self, data: T) -> SplitterVecs<T, Self>
-        where Self: Sized
-    {
-        SplitterVecs::from(self, data)
-    }
-
-    fn as_vecs<'a, T: Iterator<Item=u8>>(&'a self, data: T) -> SplitterVecs<T, &Self>
-        where Self: Sized
-    {
-        SplitterVecs::from(self, data)
-    }
-}
-
-impl<'a, S: Splitter + ?Sized> Splitter for &'a S {
-    fn split<'b>(&self, data: &'b [u8]) -> (&'b[u8], &'b[u8])
-    {
-        (*self).split(data)
-    }
-
-    fn next_iter<T: Iterator<Item=u8>>(&self, iter: T) -> Option<Vec<u8>>
-    {
-        (*self).next_iter(iter)
-    }
-}
-
-#[derive(Clone, Debug, Copy, PartialEq, Eq)]
-pub enum Bound<T> {
-    Included(T),
-    Excluded(T),
-    Unbounded,
-}
-
-#[derive(Clone, Debug, Copy, PartialEq, Eq)]
-pub struct Range<T> {
-    pub lower: Bound<T>,
-    pub upper: Bound<T>
-}
-
-impl<T> Range<T> {
-    #[allow(dead_code)]
-    fn new() -> Self
-    {
-        Range { lower: Bound::Unbounded, upper: Bound::Unbounded }
-    }
-
-    #[allow(dead_code)]
-    fn from_range(r: std::ops::Range<T>) -> Self
-    {
-        Range { lower: Bound::Included(r.start), upper: Bound::Excluded(r.end) }
-    }
-
-    fn from_inclusive(r: std::ops::Range<T>) -> Self
-    {
-        Range { lower: Bound::Included(r.start), upper: Bound::Included(r.end) }
-    }
-
-    fn exceeds_max(&self, item: &T) -> bool
-        where T: PartialOrd<T>
-    {
-        match self.upper {
-            Bound::Included(ref i) => if item > i { return true; },
-            Bound::Excluded(ref i) => if item >= i { return true; },
-            Bound::Unbounded => {}
+        IterSlices {
+            rem: data,
+            chunker: self,
         }
-
-        false
     }
 
-    fn under_min(&self, item: &T) -> bool
-        where T: PartialOrd<T>
+    /// Given a [`ChunkIncr`] and a single slice, return a list of slices chunked by the chunker.
+    /// Does not return the remainder (if any) in the iteration. Use [`IterSlices::take_rem()`] or
+    /// [`IterSlices::into_parts()`] to get the remainder.
+    ///
+    /// Note that this is a non-incrimental interface. Calling this on an already fed chunker or using
+    /// this multiple times on the same chunker may provide unexpected results
+    fn iter_slices_strict<'a>(self, data: &'a [u8]) -> IterSlicesStrict<'a, Self>
+    where
+        Self: std::marker::Sized,
     {
-        match self.lower {
-            Bound::Included(ref i) => if item < i { return true; },
-            Bound::Excluded(ref i) => if item <= i { return true; },
-            Bound::Unbounded => {}
-        }
-
-        false
-    }
-
-    #[allow(dead_code)]
-    fn contains(&self, item: &T) -> bool
-        where T: PartialOrd<T>
-    {
-        /* not excluded by lower */
-        if self.under_min(item) {
-            return false;
-        }
-
-        if self.exceeds_max(item) {
-            return false;
-        }
-
-        true
-    }
-}
-
-/// Iterator over slices emitted from a splitter
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SplitterSlices<'a, T: Splitter + 'a> {
-    parent: T,
-    d: &'a [u8],
-}
-
-impl<'a, T: Splitter> SplitterSlices<'a, T> {
-    pub fn from(i: T, d : &'a [u8]) -> Self
-    {
-        SplitterSlices {
-            parent: i,
-            d: d,
+        IterSlicesStrict {
+            rem: data,
+            chunker: self,
         }
     }
 }
 
-impl<'a, T: Splitter> Iterator for SplitterSlices<'a, T> {
+/// Returned by [`ChunkIncr::iter_slices_strict()`]
+///
+/// Always emits _complete_ slices durring iteration.
+#[derive(Debug)]
+pub struct IterSlicesStrict<'a, C: ChunkIncr> {
+    rem: &'a [u8],
+    chunker: C,
+}
+
+impl<'a, C: ChunkIncr> IterSlicesStrict<'a, C> {
+    /// Take the remainder from this iterator. Leaves an empty slice in it's place.
+    pub fn take_rem(&mut self) -> &'a [u8] {
+        let mut l: &[u8] = &[];
+        mem::swap(&mut self.rem, &mut l);
+        l
+    }
+
+    /// Obtain the internals
+    ///
+    /// Useful, for example, after iteration stops to obtain the remaining slice.
+    pub fn into_parts(self) -> (C, &'a [u8]) {
+        (self.chunker, self.rem)
+    }
+}
+
+impl<'a, C: ChunkIncr> Iterator for IterSlicesStrict<'a, C> {
     type Item = &'a [u8];
 
-    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.d.is_empty() {
+        match self.chunker.push(self.rem) {
+            None => None,
+            Some(l) => {
+                let (v, rn) = self.rem.split_at(l);
+                self.rem = rn;
+                Some(v)
+            }
+        }
+    }
+}
+
+/// Returned by [`ChunkIncr::iter_slices()`]
+///
+/// When it runs out of data, it returns the remainder as the last element of the iteration
+#[derive(Debug)]
+pub struct IterSlices<'a, C: ChunkIncr> {
+    rem: &'a [u8],
+    chunker: C,
+}
+
+impl<'a, C: ChunkIncr> IterSlices<'a, C> {
+    /// Obtain the internals
+    ///
+    /// Useful, for example, after iteration stops to obtain the remaining slice.
+    pub fn into_parts(self) -> (C, &'a [u8]) {
+        (self.chunker, self.rem)
+    }
+}
+
+impl<'a, C: ChunkIncr> Iterator for IterSlices<'a, C> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.rem.is_empty() {
             return None;
         }
 
-        let (a, b) = self.parent.borrow().split(self.d);
-        if a.is_empty() {
-            /* FIXME: this probably means we won't emit an empty slice */
-            self.d = a;
-            Some(b)
-        } else {
-            self.d = b;
-            Some(a)
-        }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>)
-    {
-        /* At most, we'll end up returning a slice for every byte, +1 empty slice */
-        if self.d.is_empty() {
-            (0, Some(0))
-        } else {
-            (1, Some(self.d.len() + 1))
+        match self.chunker.push(self.rem) {
+            None => {
+                let v = self.rem;
+                self.rem = &[];
+                Some(v)
+            }
+            Some(l) => {
+                let (v, rn) = self.rem.split_at(l);
+                self.rem = rn;
+                Some(v)
+            }
         }
     }
 }
 
-/// Iterator over vecs emitted from a splitter
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SplitterVecs<T, P: Splitter> {
-    parent: P,
-    d: T,
+/// Impl on algorthms that define methods of chunking data
+///
+/// This is the lowest level (but somewhat restrictive) trait for chunking algorthms.  It assumes
+/// that the input is provided to it in a contiguous slice. If you don't have your input as a
+/// contiguous slice, [`ChunkIncr`] may be a better choice (it allows non-contiguous input, but may
+/// be slowing for some chunking algorthms).
+pub trait Chunk {
+    /// `SearchState` allows searching for the chunk edge to resume without duplicating work
+    /// already done.
+    type SearchState;
+
+    /*
+    /// Amount of data from already emitted chunks requried for determining future chunks
+    ///
+    /// Indicates the amount of data that _must_ be preserved for [`find_chunk_edge()`]'s
+    /// `prev_data` argument. If more that this is passed, the last bytes in the slice are used. At
+    /// the start of an input (where there is no previous data), an empty slice would be used.
+    ///
+    /// For most chunking algorithms, this is `0` (zero), indicating that `prev_data` may always be
+    /// an empty slice.
+    const CARRY_LEN: usize;
+    */
+
+    /// Provide an initial [`SearchState`] for use with [`find_chunk_edge()`]. Generally, for each
+    /// input one should generate a new [`SearchState`].
+    fn to_search_state(&self) -> Self::SearchState;
+
+    /// Find the next "chunk" in `data` to emit
+    ///
+    /// The return value is a pair of a range representing the start and end of the chunk being
+    /// emitted, and the offset from which subsequent `data` subsets should be passed to the next
+    /// call to `find_chunk_edge`.
+    ///
+    /// `state` is mutated so that it does not rexamine previously examined data, even when a chunk
+    /// is not emitted.
+    ///
+    /// `data` may be extended with additional data between calls to `find_chunk_edge()`. The bytes
+    /// that were _previously_ in `data` and are not indicated by `discard_ct` must be preserved in
+    /// the next `data` buffer called.
+    ///
+    /// ```rust
+    /// use hash_roll::Chunk;
+    ///
+    /// fn some_chunk() -> impl Chunk {
+    ///     hash_roll::mii::Mii::default()
+    /// }
+    ///
+    /// let chunk = some_chunk();
+    /// let orig_data = b"hello";
+    /// let mut data = &orig_data[..];
+    /// let mut ss = chunk.to_search_state();
+    /// let mut prev_cut = 0;
+    ///
+    /// loop {
+    ///    let (chunk, discard_ct) = chunk.find_chunk_edge(&mut ss, data);
+    ///
+    ///    match chunk {
+    ///        Some(cut_point) => {
+    ///            // map `cut_point` from the current slice back into the original slice so we can
+    ///            // have consistent indexes
+    ///            let g_cut = cut_point + orig_data.len() - data.len();
+    ///            println!("chunk: {:?}", &orig_data[prev_cut..cut_point]);
+    ///        },
+    ///        None => {
+    ///            println!("no chunk, done with data we have");
+    ///            println!("remain: {:?}", &data[discard_ct..]);
+    ///            break;
+    ///        }
+    ///    }
+    ///
+    ///    data = &data[discard_ct..];
+    /// }
+    /// ```
+    ///
+    /// Note: call additional times on the same `SearchState` and the required `data` to obtain
+    /// subsequent chunks in the same input data. To handle a seperate input, use a new
+    /// `SearchState`.
+    ///
+    /// Note: calling with a previous `state` with a new `data` that isn't an extention of the
+    /// previous `data` will result in split points that may not follow the design of the
+    /// underlying algorithm. Avoid relying on consistent cut points to reason about memory safety.
+    ///
+    // NOTE: the reason that we preserve `state` even when chunks are emitted is that some
+    // algorthims require some state to pass between chunks for a given input. zstd includes an
+    // example of an algorithm that needs this
+    //
+    // Potential pitfal: for better performance, keeping the return value small is a very good
+    // idea. By returning ~2x64+32, we are might be less performant depending on the ABI selected.
+    //
+    // Consider if result should return `(&[u8], &[u8])` instead of an index (which would then be
+    // given to `.split_at()`
+    //
+    // Consider if `state` should have a `reset()` method to avoid reallocating
+    //
+    // API:
+    //  - `fn find_chunk_edge(&self, state: &mut Self::SearchState, data: &[u8]) -> (Option<(usize, uszie)>, usize);
+    //     - Problem: unclear what indexes of slices represent: start can't be in the data being
+    //       passed because we don't require `data` include the start of the chunk
+    //  - `fn find_chunk_edge(&self, state: &mut Self::SearchState, data: &[u8]) -> (Option<usize>, usize);
+    //     - Problem: user code to track indexing match up is somewhat difficult
+    //     - mostly due to needing an extra index to track to handle the "last chunk" location not
+    //     being the "slice we need to pass start"
+    fn find_chunk_edge(&self, state: &mut Self::SearchState, data: &[u8])
+        -> (Option<usize>, usize);
 }
 
-impl<T, P: Splitter> SplitterVecs<T, P> {
-    pub fn from(i: P, d: T) -> Self
-    {
-        SplitterVecs {
-            parent: i,
-            d: d,
-        }
-    }
-}
+/// Implimented on types which can be converted to/can provide a [`ChunkIncr`] interface.
+///
+/// Types that impliment this generally represent a instantiation of a chunking algorithm.
+// NOTE: we use this instead of just having `From<&C: Chunk> for CI: ChunkIncr` because there is
+// _one_ `ChunkIncr` for each `Chunk`, and rust can't infer that when using a `From` or `Into`
+// bound.
+//
+// We could consider adding `type Incr` into `trait Chunk`, or only having `type Incr`
+pub trait ToChunkIncr {
+    /// `Incr` provides the incrimental interface to this chunking instance
+    type Incr: ChunkIncr;
 
-impl<T: Iterator<Item=u8>, P: Splitter> Iterator for SplitterVecs<T, P> {
-    type Item = Vec<u8>;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.parent.borrow().next_iter(&mut self.d)
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>)
-    {
-        /* At most, we'll end up returning a vec for every byte, +1 empty slice */
-        let (a, b) = self.d.size_hint();
-        (a, if let Some(c) = b { Some(c + 1) } else { None })
-    }
-}
-
-#[test]
-fn test_rsyncable() {
-    use std::collections::HashSet;
-
-    let d1 = b"hello, this is some bytes";
-    let mut d2 = d1.clone();
-    d2[4] = ':' as u8;
-
-    let b1 = Rsyncable::with_window_and_modulus(4, 8).into_vecs(d1.iter().cloned());
-    let b2 = Rsyncable::with_window_and_modulus(4, 8).into_vecs(d2.iter().cloned());
-
-    let c1 = b1.clone().count();
-    let c2 = b2.clone().count();
-
-    /* XXX: in this contrived case, we generate the same number of blocks.
-     * We should generalize this test to guess at "reasonable" differences in block size
-     */
-    assert_eq!(c1, 4);
-    assert!((c1 as i64 - c2 as i64).abs() < 1);
-
-    /* check that some blocks match up */
-
-    let mut blocks = HashSet::with_capacity(c1);
-    let mut common_in_b1 = 0u64;
-    for b in b1 {
-        if !blocks.insert(b) {
-            common_in_b1 += 1;
-        }
-    }
-
-    println!("common in b1: {}", common_in_b1);
-
-    let mut shared_blocks = 0u64;
-    for b in b2 {
-        if blocks.contains(&b) {
-            shared_blocks += 1;
-        }
-    }
-
-    /* XXX: this is not a generic test, we can't rely on it */
-    println!("shared blocks: {}", shared_blocks);
-    assert!(shared_blocks > (c1 as u64) / 2);
+    /// `to_chunk_incr()` returns a [`ChunkIncr`] which can be incrimentally fed data and emits
+    /// chunks.
+    ///
+    /// Generally, this is a typically low cost operation that copies from the implimentor or does
+    /// minor computation on its fields and may allocate some memory for storing additional state
+    /// needed for incrimental computation.
+    fn to_chunk_incr(&self) -> Self::Incr;
 }

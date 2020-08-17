@@ -1,37 +1,37 @@
-extern crate rollsum;
-extern crate hash_roll;
-#[macro_use]
-extern crate quickcheck;
+#![cfg(feature = "bup")]
+use quickcheck::quickcheck;
 
-use hash_roll::Splitter;
+use hash_roll::ChunkIncr;
 
 quickcheck! {
     fn simple_eq(xs: Vec<u8>) -> bool {
-        let m1 = hash_roll::Bup::default();
+        let mut m1 = hash_roll::bup::RollSumIncr::default();
         let mut m2 = rollsum::Bup::default();
 
-        let v1 = m1.find_chunk_edge(&xs);
-        let v2 = m2.find_chunk_edge(&xs).unwrap_or(0);
+        let v1 = m1.push(&xs);
+        let v2 = m2.find_chunk_edge(&xs);
 
         v1 == v2
     }
 
     fn iter_eq(xs: Vec<u8>) -> bool {
-        let m1 = hash_roll::Bup::default();
+        let mut m1 = hash_roll::bup::RollSumIncr::default();
         let mut m2 = rollsum::Bup::default();
 
         let mut x = &xs[..];
         loop {
-            let v1 = m1.find_chunk_edge(&x);
-            let v2 = m2.find_chunk_edge(&x).unwrap_or(0);
+            let v1 = m1.push(&x);
+            let v2 = m2.find_chunk_edge(&x);
 
             if v1 != v2 {
                 return false
             }
 
-            if v1 == 0 {
+            if v1 == None {
                 return true
             }
+
+            let v1 = v1.unwrap();
 
             x = &x[v1..];
             if x.len() == 0 {
@@ -42,20 +42,20 @@ quickcheck! {
 }
 
 fn chk_a(x: &[u8]) {
-    let m1 = hash_roll::Bup::default();
+    let mut m1 = hash_roll::bup::RollSumIncr::default();
     let mut m2 = rollsum::Bup::default();
 
-    let v1 = m1.find_chunk_edge(&x);
-    let v2 = m2.find_chunk_edge(&x).unwrap_or(0);
+    let v1 = m1.push(&x);
+    let v2 = m2.find_chunk_edge(&x);
 
-    assert_eq!(v1,v2);
+    assert_eq!(v1, v2);
 }
 
 fn chk_b(x: &[u8]) {
     use rollsum::Engine;
-    let mut m1 = hash_roll::bup::RollSum::default();
+    let mut m1 = hash_roll::bup::RollSumIncr::default();
     let mut m2 = rollsum::Bup::default();
-    let cm = (1<<rollsum::bup::CHUNK_BITS) - 1;
+    let cm = (1 << rollsum::bup::CHUNK_BITS) - 1;
 
     for (i, &v) in x.iter().enumerate() {
         m1.roll_byte(v);
@@ -66,15 +66,20 @@ fn chk_b(x: &[u8]) {
     }
 }
 
-
 #[test]
 fn simple_eq_1() {
-    chk_a(&[92, 6, 28, 35, 68, 82, 35, 71, 34, 19, 9, 45, 97, 17, 11, 6, 53, 39, 93, 49, 29, 17, 37, 6, 39]);
+    chk_a(&[
+        92, 6, 28, 35, 68, 82, 35, 71, 34, 19, 9, 45, 97, 17, 11, 6, 53, 39, 93, 49, 29, 17, 37, 6,
+        39,
+    ]);
 }
 
 #[test]
 fn simple_eq_1b() {
-    chk_b(&[92, 6, 28, 35, 68, 82, 35, 71, 34, 19, 9, 45, 97, 17, 11, 6, 53, 39, 93, 49, 29, 17, 37, 6, 39]);
+    chk_b(&[
+        92, 6, 28, 35, 68, 82, 35, 71, 34, 19, 9, 45, 97, 17, 11, 6, 53, 39, 93, 49, 29, 17, 37, 6,
+        39,
+    ]);
 }
 
 #[test]
@@ -84,5 +89,7 @@ fn simple_eq_2() {
 
 #[test]
 fn simple_eq_3() {
-    chk_a(&[40, 58, 57, 0, 16, 2, 32, 88, 0, 22, 23, 74, 90, 88, 95, 99, 86]);
+    chk_a(&[
+        40, 58, 57, 0, 16, 2, 32, 88, 0, 22, 23, 74, 90, 88, 95, 99, 86,
+    ]);
 }

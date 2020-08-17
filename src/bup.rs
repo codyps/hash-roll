@@ -1,6 +1,6 @@
-use std::marker::PhantomData;
+use crate::{Chunk, ChunkIncr, ToChunkIncr};
+use std::fmt;
 use std::num::Wrapping;
-use super::{Splitter,Split2};
 
 const BLOBBITS: u8 = 13;
 const BLOBSIZE: u32 = 1 << (BLOBBITS as u32);
@@ -10,75 +10,188 @@ const WINDOW_SIZE: usize = 1 << (WINDOW_BITS as usize);
 
 const ROLLSUM_CHAR_OFFSET: usize = 31;
 
-/**
- * Rolling sum used in Bup. This is based on the one in librsync.
- *
- * A new instance is used for each block splitting. In other words: after finding the first edge, a
- * new `RollSum` is instantiated to find the next edge.
- */
-// Note: the [u8;WINDOW_SIZE] blocks most derives (Clone, Debug, PartialEq, Eq) due to the lack of
-// impls for [u8;WINDOW_SIZE]. Explore the potential for using a custom derive plugin/macro to
-// generate these impls more easily.
+/// Rolling sum used by [`Bup`] for splitting
+///
+/// - https://github.com/bup/bup/blob/0ab7c3a958729b4723e6fe254da771aff608c2bf/lib/bup/bupsplit.c
+/// - https://github.com/bup/bup/blob/0ab7c3a958729b4723e6fe254da771aff608c2bf/lib/bup/bupsplit.h
+///
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RollSum {
+    window_len: usize,
+}
+
+impl ToChunkIncr for RollSum {
+    type Incr = RollSumIncr;
+
+    fn to_chunk_incr(&self) -> Self::Incr {
+        self.into()
+    }
+}
+
+impl RollSum {
+    pub fn with_window(window_len: usize) -> Self {
+        Self { window_len }
+    }
+}
+
+impl Chunk for RollSum {
+    type SearchState = RollSumSearchState;
+
+    fn to_search_state(&self) -> Self::SearchState {
+        self.into()
+    }
+
+    fn find_chunk_edge(
+        &self,
+        state: &mut Self::SearchState,
+        data: &[u8],
+    ) -> (Option<usize>, usize) {
+        for i in state.offset..data.len() {
+            let a = data[i];
+            let d = if i >= self.window_len {
+                data[i - self.window_len]
+            } else {
+                0
+            };
+
+            state.state.add(self.window_len, d, a);
+
+            if state.state.at_split() {
+                state.reset(self);
+                return (Some(i + 1), i + 1);
+            }
+        }
+
+        // keep k elements = discard all but k
+        let discard_ct = data.len().saturating_sub(self.window_len);
+        state.offset = data.len() - discard_ct;
+        (None, discard_ct)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RollSumState {
+    // NOTE: in bup, these are `unsigned`, but masking indicates they'll end up being used as
+    // u16's. In `librsync`, these are `uint_fast16_t`, which end up being u32 on most platforms.
+    // Both only require `u16` values to be represented. We use `u32` here as it's likely to be
+    // somewhat more performant, but this should be examined
     s1: Wrapping<u32>,
     s2: Wrapping<u32>,
+}
+
+impl From<&RollSum> for RollSumState {
+    fn from(s: &RollSum) -> Self {
+        let ws = Wrapping(s.window_len as u32);
+        // NOTE: bup uses this initialization, but librsync uses zeros.
+        //
+        // I believe the idea is to allow a slightly different implimentation of the "setup"
+        // portion of the processing (ie: before the window is filled)
+        Self {
+            s1: ws * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
+            s2: ws * (ws - Wrapping(1)) * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
+        }
+    }
+}
+
+impl RollSumState {
+    fn reset(&mut self, params: &RollSum) {
+        *self = params.into()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RollSumSearchState {
+    state: RollSumState,
+    offset: usize,
+}
+
+impl From<&RollSum> for RollSumSearchState {
+    fn from(s: &RollSum) -> Self {
+        Self {
+            state: s.into(),
+            offset: 0,
+        }
+    }
+}
+
+impl RollSumSearchState {
+    fn reset(&mut self, params: &RollSum) {
+        self.offset = 0;
+        self.state.reset(params);
+    }
+}
+
+impl Default for RollSum {
+    fn default() -> Self {
+        Self::with_window(WINDOW_SIZE)
+    }
+}
+
+/// Incrimental instance of [`RollSum`]
+///
+/// Performance note: Bup's Roll sum algorithm requires tracking the entire window. As a result,
+/// this includes a circular buffer which all inputs are copied through. If your use case allows
+/// it, use the non-incrimental variant for improved performance.
+#[derive(Clone, PartialEq, Eq)]
+pub struct RollSumIncr {
+    state: RollSumState,
 
     /// window offset
     wofs: Wrapping<usize>,
     window: Box<[u8]>,
 }
 
-impl ::std::fmt::Debug for RollSum {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error>
-    {
-        f.debug_struct("RollSum")
-            .field("s1", &self.s1)
-            .field("s2", &self.s2)
+impl fmt::Debug for RollSumIncr {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> Result<(), ::std::fmt::Error> {
+        f.debug_struct("RollSumIncr")
+            .field("state", &self.state)
             .field("window", &::fmt_extra::Hs(&self.window[..]))
             .field("wofs", &self.wofs)
             .finish()
     }
 }
 
-impl Clone for RollSum {
-    fn clone(&self) -> Self {
-        RollSum {
-            window: self.window.clone(),
-            ..*self
+impl From<&RollSum> for RollSumIncr {
+    fn from(params: &RollSum) -> Self {
+        Self {
+            state: params.into(),
+            window: vec![0; params.window_len].into_boxed_slice(),
+            wofs: Wrapping(0),
         }
     }
 }
 
-impl PartialEq for RollSum {
-    fn eq(&self, other: &Self) -> bool {
-        self.s1 == other.s1 &&
-            self.s2 == other.s2 &&
-            self.wofs == other.wofs &&
-            {
-                for i in 0..self.window.len() {
-                    if self.window[i] != other.window[i] {
-                        return false;
-                    }
-                }
-
-                true
-            }
+impl Default for RollSumIncr {
+    fn default() -> Self {
+        (&RollSum::default()).into()
     }
 }
 
-impl Eq for RollSum {}
-
-impl RollSum {
-    pub fn digest(&self) -> u32 {
-        (self.s1.0 << 16) | (self.s2.0 & 0xffff)
-    }
-
-    pub fn add(&mut self, drop: u8, add: u8) {
+impl RollSumState {
+    fn add(&mut self, window_len: usize, drop: u8, add: u8) {
         let d = Wrapping(drop as u32);
         self.s1 += Wrapping(add as u32);
         self.s1 -= d;
         self.s2 += self.s1;
-        self.s2 -= Wrapping(self.window.len() as u32) * (d + Wrapping(ROLLSUM_CHAR_OFFSET as u32));
+        self.s2 -= Wrapping(window_len as u32) * (d + Wrapping(ROLLSUM_CHAR_OFFSET as u32));
+    }
+
+    fn digest(&self) -> u32 {
+        (self.s1.0 << 16) | (self.s2.0 & 0xffff)
+    }
+
+    fn at_split(&self) -> bool {
+        (self.digest() & (BLOBSIZE - 1)) == (BLOBSIZE - 1)
+    }
+}
+
+impl RollSumIncr {
+    pub fn digest(&self) -> u32 {
+        self.state.digest()
+    }
+
+    fn add(&mut self, drop: u8, add: u8) {
+        self.state.add(self.window.len(), drop, add);
     }
 
     pub fn roll_byte(&mut self, ch: u8) {
@@ -88,134 +201,71 @@ impl RollSum {
         self.wofs = Wrapping((self.wofs + Wrapping(1)).0 & (self.window.len() - 1));
     }
 
-    pub fn roll(&mut self, data: &[u8]) {
+    #[cfg(test)]
+    pub(crate) fn roll(&mut self, data: &[u8]) {
         for &i in data.iter() {
             self.roll_byte(i);
         }
     }
 
-    pub fn sum(data: &[u8]) -> u32 {
-        let mut x = Self::default(); 
+    /*
+    fn sum(data: &[u8]) -> u32 {
+        let mut x = Self::default();
         x.roll(data);
         x.digest()
     }
+    */
 
     pub fn at_split(&self) -> bool {
-        (self.digest() & (BLOBSIZE-1)) == (BLOBSIZE-1)
+        self.state.at_split()
     }
 }
 
-impl Default for RollSum {
-    fn default() -> Self {
-        let ws = Wrapping(WINDOW_SIZE as u32);
-        RollSum {
-            s1: ws * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
-            s2: ws * (ws-Wrapping(1)) * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
-            window: vec![0;WINDOW_SIZE].into_boxed_slice(),
-            wofs: Wrapping(0),
-        }
-    }
-}
-
-#[derive(Clone,Debug,Eq,PartialEq)]
-pub struct BupBuf {
-    r: RollSum
-}
-
-impl Default for BupBuf {
-    fn default() -> Self
-    {
-        BupBuf {
-            r: RollSum::default()
-        }
-    }
-}
-
-impl Split2 for BupBuf {
-    fn push(&mut self, data: &[u8]) -> usize
-    {
+impl ChunkIncr for RollSumIncr {
+    fn push(&mut self, data: &[u8]) -> Option<usize> {
         for (i, &v) in data.iter().enumerate() {
-            self.r.roll_byte(v);
-            if self.r.at_split() {
-                return i+1;
+            self.roll_byte(v);
+            if self.at_split() {
+                return Some(i + 1);
             }
         }
 
-        0
-    }
-}
-
-#[derive(Clone,Debug, Eq, PartialEq)]
-pub struct Bup {
-    _x: PhantomData<()>
-}
-
-impl Default for Bup {
-    fn default() -> Self {
-        Bup { _x: PhantomData }
-    }
-}
-
-impl Splitter for Bup {
-    fn find_chunk_edge(&self, data: &[u8]) -> usize {
-        let mut bb = BupBuf::default();
-        bb.push(data)
-    }
-
-    fn next_iter<'a, T: Iterator<Item=u8>>(&'a self, iter: T) -> Option<Vec<u8>>
-    {
-        let mut r = RollSum::default();
-        let a = r.window.len() + r.window.len() / 2;
-        let mut data = Vec::with_capacity(a);
-        for v in iter {
-            data.push(v);
-            r.roll_byte(v);
-            if r.at_split() {
-                return Some(data)
-            }
-        }
-
-        if data.is_empty() {
-            None
-        } else {
-            Some(data)
-        }
+        None
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use super::super::*;
-    use rollsum::Engine;
     use rand::RngCore;
+    use rollsum::Engine;
 
     #[test]
     fn rs() {
-        let mut m = RollSum::default();
+        let mut m = RollSumIncr::default();
         m.roll_byte(3);
         assert_eq!(m.digest(), 130279491);
     }
 
     #[test]
     fn compare_rollsum() {
-        let mut m1 = RollSum::default();
+        let mut m1 = RollSumIncr::default();
         let mut m2 = rollsum::Bup::default();
 
         assert_eq!(m1.digest(), m2.digest());
 
         m1.roll_byte(4);
         m2.roll_byte(4);
-        
+
         assert_eq!(m1.digest(), m2.digest());
 
         m1.roll_byte(18);
         m2.roll_byte(18);
-        
+
         assert_eq!(m1.digest(), m2.digest());
 
         let mut r = rand::thread_rng();
-        let mut b = [0u8;2048];
+        let mut b = [0u8; 2048];
 
         r.fill_bytes(&mut b);
 
@@ -226,7 +276,6 @@ mod test {
             assert_eq!(m1.digest(), m2.digest());
         }
 
-
         m1.roll(&b);
         m2.roll(&b);
 
@@ -235,20 +284,27 @@ mod test {
 
     #[test]
     fn compare_bup() {
-        let m1 = Bup::default();
+        use super::ChunkIncr;
+        let mut m1 = RollSumIncr::default();
         let mut m2 = rollsum::Bup::default();
 
         let mut r = rand::thread_rng();
-        let mut b = [0u8;2048];
+        let mut b = [0u8; 2048];
 
         r.fill_bytes(&mut b);
 
-        let v1 = m1.find_chunk_edge(&b);
-        let v2 = m2.find_chunk_edge(&b).unwrap_or(0);
+        let mut x = &b[..];
+        loop {
+            let v1 = m1.push(&x);
+            let v2 = m2.find_chunk_edge(&x);
+            assert_eq!(v1, v2);
 
-
-        assert_eq!(v1, v2);
+            match v1 {
+                None => break,
+                Some(v) => {
+                    x = &x[v..];
+                }
+            }
+        }
     }
 }
-
-

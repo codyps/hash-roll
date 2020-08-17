@@ -1,27 +1,128 @@
+#![cfg(feature = "fastcdc")]
+
+//! FastCDC is a chunking algorithm using some features from [Gear](super::gear)
+//!
+//! Reference:
+//!  - https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf
+
+use crate::{Chunk, ChunkIncr, ToChunkIncr};
+use std::fmt;
 use std::num::Wrapping;
-use super::{Split2};
 
 // these masks are taken from the paper and could be adjusted/adjustable.
 const MASK_S: u64 = 0x0003590703530000;
 //const MASK_A: u64 = 0x0000d90303530000;
 const MASK_L: u64 = 0x0000d90003530000;
 
-// again, might be useful to allow tuning here.
-const MIN_SIZE: u64 = 2 * 1024; // 2KB
-const MAX_SIZE: u64 = 64 * 1024; // 64KB
-const NORMAL_SIZE: u64 = 8 * 1024; // 8KB
-
-/// Intermediate state for FastCDC8KB while it is processing data
+/// An instance of the "FastCDC" algorithm
 ///
-/// Reference:
+/// Default parameters:
+///  - Minimum chunk size: 2 KiB
+///  - Maximum chunk size: 64 KiB
+///  - Normal size: 8 KiB
+///  - internal 64-bit gear table: [`super::gear_table::GEAR_64`]
 ///
-///  https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf
-pub struct FastCdc8<'a> {
-    /// A map from every byte value to a "random" 64 bit number.
-    ///
-    /// Fixed configuration.
-    gear: &'a [u64;256],
+#[derive(Clone, Copy)]
+pub struct FastCdc<'a> {
+    gear: &'a [u64; 256],
+    min_size: u64,
+    max_size: u64,
+    normal_size: u64,
+}
 
+impl<'a> PartialEq for FastCdc<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.min_size == other.min_size
+            && self.max_size == other.max_size
+            && self.normal_size == other.normal_size
+            && &self.gear[..] == &other.gear[..]
+    }
+}
+
+impl<'a> Eq for FastCdc<'a> {}
+
+impl<'a> Default for FastCdc<'a> {
+    fn default() -> Self {
+        FastCdc {
+            min_size: 2 * 1024,    // 2 KiB
+            max_size: 64 * 1024,   // 64 KiB
+            normal_size: 8 * 1024, // 8 KiB
+            gear: &super::gear_table::GEAR_64,
+        }
+    }
+}
+
+impl<'a> fmt::Debug for FastCdc<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FastCdc")
+            .field("gear", &"[...]")
+            .field("min_size", &self.min_size)
+            .field("max_size", &self.max_size)
+            .field("normal_size", &self.normal_size)
+            .finish()
+    }
+}
+
+impl<'a> Chunk for FastCdc<'a> {
+    type SearchState = FastCdcState;
+
+    fn to_search_state(&self) -> Self::SearchState {
+        Default::default()
+    }
+
+    fn find_chunk_edge(
+        &self,
+        state: &mut Self::SearchState,
+        data: &[u8],
+    ) -> (Option<usize>, usize) {
+        match state.push(self, data) {
+            Some(i) => (Some(i + 1), i + 1),
+            None => (None, data.len()),
+        }
+    }
+}
+
+impl<'a> FastCdc<'a> {
+    /// Create a custom FastCDC instance
+    pub fn new(gear: &'a [u64; 256], min_size: u64, normal_size: u64, max_size: u64) -> Self {
+        Self {
+            gear,
+            min_size,
+            max_size,
+            normal_size,
+        }
+    }
+}
+
+impl<'a> ToChunkIncr for FastCdc<'a> {
+    type Incr = FastCdcIncr<'a>;
+
+    fn to_chunk_incr(&self) -> Self::Incr {
+        self.into()
+    }
+}
+
+impl<'a> From<&FastCdc<'a>> for FastCdcIncr<'a> {
+    fn from(params: &FastCdc<'a>) -> Self {
+        Self {
+            params: params.clone(),
+            state: Default::default(),
+        }
+    }
+}
+
+/// FastCdcIncr provides an incrimental interface to `FastCdc`
+///
+/// This impl does not buffer data passing through it (the FastCDC algorithm does not require
+/// look-back) making it very efficient.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct FastCdcIncr<'a> {
+    params: FastCdc<'a>,
+    state: FastCdcState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct FastCdcState {
     /// Number of bytes we've "examined"
     ///
     /// varying state.
@@ -33,258 +134,87 @@ pub struct FastCdc8<'a> {
     fp: Wrapping<u64>,
 }
 
-impl<'a> ::std::fmt::Debug for FastCdc8<'a> {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error>
-    {
-        f.debug_struct("FastCdc8")
-            .field("gear", &"[...]")
-            .field("l", &self.l)
-            .field("fp", &self.fp.0)
-            .finish()
-    }
-}
-
-impl<'a> Clone for FastCdc8<'a> {
-    fn clone(&self) -> Self {
-        FastCdc8 {
-            ..*self
-        }
-    }
-}
-
-impl<'a> PartialEq for FastCdc8<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.fp == other.fp &&
-            self.l == other.l &&
-            {
-                for i in 0..self.gear.len() {
-                    if self.gear[i] != other.gear[i] {
-                        return false;
-                    }
-                }
-
-                true
-            }
-    }
-}
-
-impl<'a> Eq for FastCdc8<'a> {}
-
-impl<'a> FastCdc8<'a> {
-    fn reset(&mut self)
-    {
+impl FastCdcState {
+    fn reset(&mut self) {
         self.l = 0;
         self.fp = Wrapping(0);
     }
-}
 
-impl<'a> Default for FastCdc8<'a> {
-    fn default() -> Self {
-        FastCdc8 {
-            fp: Wrapping(0),
-            l: 0,
-            gear: &super::gear_table::GEAR_64,
-        }
-    }
-}
-
-impl<'a> Split2 for FastCdc8<'a> {
-    fn push(&mut self, mut src: &[u8]) -> usize {
-        // global index
+    fn push(&mut self, params: &FastCdc<'_>, data: &[u8]) -> Option<usize> {
+        // global start/index
         let mut gi = self.l;
-        // global length
-        let gl = src.len() as u64 + gi;
+        // global end
+        let ge = data.len() as u64 + gi;
 
-        if gl <= MIN_SIZE {
+        if ge <= params.min_size {
             // No split, no processing of data, but we've "consumed" the bytes.
-            self.l = gl;
-            return 0;
+            self.l = ge;
+            return None;
         }
 
-        // skip elements prior to MIN_SIZE
-        let ibase = if gi <= MIN_SIZE {
-            let skip = MIN_SIZE - gi;
-            src = &src[skip as usize..];
+        // skip elements prior to MIN_SIZE and track offset of new `data` in argument `data` for
+        // return value
+        let mut i = if gi <= params.min_size {
+            let skip = params.min_size - gi;
             gi += skip;
             skip
         } else {
             0
         } as usize;
 
-        let mut src = src.iter().enumerate();
         let mut fp = self.fp;
 
-        for (i, &v) in &mut src {
-            gi += 1;
-
-            if gi >= NORMAL_SIZE {
+        loop {
+            if i >= data.len() {
+                break;
+            }
+            if gi >= params.normal_size {
                 // go to next set of matches
                 break;
             }
 
-            fp = (fp << 1) + Wrapping(self.gear[v as usize]);
-            if (fp.0 & MASK_S) == 0{
+            let v = data[i];
+            fp = (fp << 1) + Wrapping(params.gear[v as usize]);
+            if (fp.0 & MASK_S) == 0 {
                 self.reset();
-                return ibase + i;
+                return Some(i);
             }
+
+            gi += 1;
+            i += 1;
         }
 
-        for (i, &v) in &mut src {
-            gi += 1;
-
-            if gi >= MAX_SIZE {
+        loop {
+            if gi >= params.max_size {
                 // no match found, emit fixed match at MAX_SIZE
                 self.reset();
-                return ibase + i;
+                return Some(i);
+            }
+            if i >= data.len() {
+                break;
             }
 
-            fp = (fp << 1) + Wrapping(self.gear[v as usize]);
+            let v = data[i];
+            fp = (fp << 1) + Wrapping(params.gear[v as usize]);
             if (fp.0 & MASK_L) == 0 {
                 self.reset();
-                return ibase + i;
+                return Some(i);
             }
+
+            gi += 1;
+            i += 1;
         }
 
         // no match, but not at MAX_SIZE yet, so store context for next time.
         self.fp = fp;
-        self.l = gi;
+        self.l = ge;
 
-        0
+        None
     }
 }
 
-/// A 1-buffer implimentation of FastCDC8KB designed to match the reference pseudocode
-#[cfg(test)]
-fn fast_cdc_8kb(src: &[u8]) -> usize
-{
-    let mut fp = Wrapping(0);
-    let mut n = src.len();
-    let mut normal_size = NORMAL_SIZE as usize;
-    if n <= (MIN_SIZE as usize) {
-        // Diverge from the reference here:
-        //  return 0 to indicate no split found rather than src.len()
-        return 0;
-    }
-
-    if n >= (MAX_SIZE as usize){
-        n = MAX_SIZE as usize;
-    } else if n <= normal_size {
-        normal_size = n;
-    }
-
-    for i in (MIN_SIZE as usize)..normal_size {
-        fp = (fp << 1) + Wrapping(super::gear_table::GEAR_64[src[i] as usize]);
-        if (fp.0 & MASK_S) == 0 {
-            return i;
-        }
-    }
-
-    for i in normal_size..n {
-        fp = (fp << 1) + Wrapping(super::gear_table::GEAR_64[src[i] as usize]);
-        if (fp.0 & MASK_L) == 0 {
-            return i;
-        }
-    }
-
-    // Diverge from the reference here:
-    //  return 0 to indicate no split found rather than src.len()
-    0
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use quickcheck::{self,quickcheck};
-
-    #[derive(Debug,Clone,PartialEq,Eq)]
-    struct Vec8K {
-        data: Vec<u8>
-    }
-
-    impl quickcheck::Arbitrary for Vec8K {
-        fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Self {
-            // FIXME: the intention is to raise this >8KB, but that makes the tests take far too
-            // long to run.
-            let l = 1 * 1024 + g.size();
-
-            let mut d = vec![0;l];
-
-            g.fill_bytes(&mut d[..]);
-
-            Vec8K {
-                data: d
-            }
-        }
-
-        fn shrink(&self) -> Box<Iterator<Item=Self>> {
-            // use the normal Vec shrinkers
-            let chain = self.data.shrink().map(|x| Vec8K { data: x });
-            Box::new(chain)
-        }
-    }
-
-    fn oracle_1(d: Vec8K) -> bool {
-        let mut cdc = FastCdc8::default();
-        let v1 = fast_cdc_8kb(&d.data[..]);
-        let v2 = cdc.push(&d.data[..]);
-
-        v1 == v2
-    }
-
-    fn oracle_1_test(data: Vec<u8>) {
-        let mut cdc = FastCdc8::default();
-        let v1 = fast_cdc_8kb(&data[..]);
-        let v2 = cdc.push(&data[..]);
-
-        assert_eq!(v1, v2);
-    }
-
-    #[test]
-    fn o1_empty() {
-        oracle_1_test(vec![0]);
-    }
-
-    #[test]
-    fn o1_qc() {
-        quickcheck(oracle_1 as fn(Vec8K) -> bool);
-    }
-
-    #[test]
-    fn o1_8k1() {
-        use rand::RngCore;
-        let mut d = Vec::with_capacity(8*1024*1024 + 1);
-        let c = d.capacity();
-        unsafe { d.set_len(c) };
-        let mut rng = ::rand::thread_rng();
-        rng.fill_bytes(&mut d);
-        oracle_1_test(d);
-    }
-
-    #[test]
-    fn feed_until_5_chunks() {
-        use rand::RngCore;
-        let mut cdc = FastCdc8::default();
-        let mut ct = 0;
-        let mut rng = ::rand::thread_rng();
-        let mut d = [0u8;256];
-        rng.fill_bytes(&mut d);
-        loop {
-            rng.fill_bytes(&mut d);
-            let mut data = &d[..];
-            loop {
-                let p = cdc.push(&data[..]);
-                println!("p: {}, cdc: {:?}", p, cdc);
-
-                if p == 0 || p == data.len() {
-                    break;
-                } else {
-                    ct += 1;
-                    if ct > 5 {
-                        return;
-                    }
-                    data = &data[p..];
-                }
-            }
-        }
+impl<'a> ChunkIncr for FastCdcIncr<'a> {
+    fn push(&mut self, src: &[u8]) -> Option<usize> {
+        self.state.push(&self.params, src)
     }
 }
