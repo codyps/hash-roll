@@ -143,7 +143,7 @@ pub trait ChunkIncr {
     ///
     /// Will always return enough slices to form the entire content of `data`, even if the trailing
     /// part of data is not a chunk (ie: does not end on a chunk boundary)
-    fn iter_slices<'a>(self, data: &'a [u8]) -> IterSlices<'a, Self>
+    fn iter_slices(self, data: &[u8]) -> IterSlices<'_, Self>
     where
         Self: std::marker::Sized,
     {
@@ -159,7 +159,7 @@ pub trait ChunkIncr {
     ///
     /// Note that this is a non-incrimental interface. Calling this on an already fed chunker or using
     /// this multiple times on the same chunker may provide unexpected results
-    fn iter_slices_strict<'a>(self, data: &'a [u8]) -> IterSlicesStrict<'a, Self>
+    fn iter_slices_strict(self, data: &[u8]) -> IterSlicesStrict<'_, Self>
     where
         Self: std::marker::Sized,
     {

@@ -1,5 +1,9 @@
 language: rust
 
+branches:
+  except:
+  - /.*\.tmp/
+
 rust:
   - stable
   - beta
