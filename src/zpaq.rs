@@ -286,7 +286,7 @@ impl PartialEq for ZpaqHash {
     fn eq(&self, other: &Self) -> bool {
         self.hash == other.hash
             && self.last_byte == other.last_byte
-            && &self.predicted_byte[..] == &other.predicted_byte[..]
+            && self.predicted_byte[..] == other.predicted_byte[..]
     }
 }
 
