@@ -4,9 +4,13 @@
 //!
 //! BuzHash with various chunk-splitting methods is used in:
 //!   - [Borg](https://github.com/borgbackup/borg)
+//!      - https://github.com/borgbackup/borg/blob/master/src/borg/_chunker.c
 //!   - [Attic](https://github.com/jborg/attic)
-//!     - via [silvasur/buzhash](https://github.com/silvasur/buzhash)
-//!   - [attic-labs/nom](https://github.com/attic-labs/noms/blob/26620a34bc8c95812037588869d4790b5581b34d/go/types/rolling_value_hasher.go#L15-L21)
+//!     - https://github.com/jborg/attic/blob/master/attic/_chunker.c
+//!   - [silvasur/buzhash](https://github.com/silvasur/buzhash), in turn used in:
+//!     - [attic-labs/nom](https://github.com/attic-labs/noms/blob/26620a34bc8c95812037588869d4790b5581b34d/go/types/rolling_value_hasher.go#L15-L21)
+//!     - [dolt](https://github.com/liquidata-inc/dolt)
+//!   - [casync](https://github.com/systemd/casync/blob/master/src/cachunker.c)
 //!
 //! Documentation:
 //!
