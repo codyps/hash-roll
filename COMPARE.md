@@ -124,18 +124,23 @@
        the end of a chunk.
      - from a `Read` to an iterator of (start, len, end) (ie: no data returned)
      - from a `&[u8]` to an `Iterator<Item=[u8]>`
- - [rollsum](https://lib.rs/crates/rollsum)
-   - latest release: 2016-05-30 v0.2.1
-     - inactive development (as of 2020-06-21)
-   - algorithm(s): rollsum (based on bupsplit, based on rsync chunking)
+ - [rollsum](https://lib.rs/crates/rollsum) aka [rsroll](https://github.com/aidanhs/rsroll)
+   - latest release: (commit 2019-12-22, publish 2020-09-27) v0.3.0
+     - uncertain inactive development (as of 2020-10-08)
+   - algorithm(s):
+     - rollsum (based on bupsplit, based on rsync chunking)
+     - gear
+   - incrimental input: yes
+   - includes a static table for gearhash
    - low level trait has byte-by-byte and slice based interfaces
    - exposes conditionality of chunk edge (ie: like a rolling-sum) in trait,
      but provides a helper on the specific struct that uses it's defaults.
    - requires explicit state resets after finding a chunk edge to find the next
      chunk edge (doesn't reset internal state)
-   - api: call `find_chunk_edge()` with different slices until Some(usize) is
+   - api: call `find_chunk_edge()` with different slices until Some((usize, Sum)) is
      returned. the `usize` here is the offset after the end of the chunk (ie:
      start of the next chunk).
+   - provides access to the underlying Sum on each edge
  - [rededup-cdc](https://lib.rs/crates/rdedup-cdc)
    - `rollsum` fork
  - [bitar](https://lib.rs/crates/bitar)
