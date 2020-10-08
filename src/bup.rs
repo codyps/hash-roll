@@ -297,7 +297,7 @@ mod test {
         loop {
             let v1 = m1.push(&x);
             let v2 = m2.find_chunk_edge(&x);
-            assert_eq!(v1, v2);
+            assert_eq!(v1, v2.map(|x| x.0));
 
             match v1 {
                 None => break,
