@@ -11,7 +11,7 @@ quickcheck! {
         let v1 = m1.push(&xs);
         let v2 = m2.find_chunk_edge(&xs);
 
-        v1 == v2
+        v1 == v2.map(|x| x.0)
     }
 
     fn iter_eq(xs: Vec<u8>) -> bool {
@@ -23,7 +23,7 @@ quickcheck! {
             let v1 = m1.push(&x);
             let v2 = m2.find_chunk_edge(&x);
 
-            if v1 != v2 {
+            if v1 != v2.map(|x| x.0) {
                 return false
             }
 
@@ -48,7 +48,7 @@ fn chk_a(x: &[u8]) {
     let v1 = m1.push(&x);
     let v2 = m2.find_chunk_edge(&x);
 
-    assert_eq!(v1, v2);
+    assert_eq!(v1, v2.map(|x| x.0));
 }
 
 fn chk_b(x: &[u8]) {
