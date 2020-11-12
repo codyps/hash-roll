@@ -37,10 +37,8 @@ impl Chunk for PigzRsyncable {
         state: &mut Self::SearchState,
         data: &[u8],
     ) -> (Option<usize>, usize) {
-        for i in 0..data.len() {
-            let v = data[i];
-
-            if state.state.add(self, v) {
+        for (i, v) in data.iter().enumerate() {
+            if state.state.add(self, *v) {
                 *state = self.to_search_state();
                 return (Some(i + 1), i + 1);
             }
