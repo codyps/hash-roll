@@ -105,7 +105,7 @@ impl<'a> ToChunkIncr for FastCdc<'a> {
 impl<'a> From<&FastCdc<'a>> for FastCdcIncr<'a> {
     fn from(params: &FastCdc<'a>) -> Self {
         Self {
-            params: params.clone(),
+            params: *params,
             state: Default::default(),
         }
     }

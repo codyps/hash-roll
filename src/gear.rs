@@ -57,8 +57,8 @@ impl<'a> Chunk for Gear32<'a> {
         state: &mut Self::SearchState,
         data: &[u8],
     ) -> (Option<usize>, usize) {
-        for i in 0..data.len() {
-            if state.push(self, data[i]) {
+        for (i, v) in data.iter().enumerate() {
+            if state.push(self, *v) {
                 *state = self.to_search_state();
                 return (Some(i + 1), i + 1);
             }
