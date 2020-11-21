@@ -12,9 +12,10 @@
 //!
 //! ## API Concepts
 //!
-//! - Configured Algorithm Instance (impliments [`Chunk`]). Normally named plainly (like
-//!   [`Bup`]). These can be thought of as "parameters" for an algorithm.
-//! - Incrimental (impliments [`ChunkIncr`]). Normally named with `Incr` suffix.
+//! - Configured Algorithm Instance (impliments [`Chunk`]). Named plainly using the algorithm name
+//!  (like [`Bup`]). These can be thought of as "parameters" for an algorithm.
+//! - Incrimental (impliments [`ChunkIncr`]). Normally named with `Incr` suffix. These are created
+//!   using [`ToChunkIncr`] for a configured algorithm instance.
 //!
 //! Because of the various ways one might use a CDC, and the different CDC algorithm
 //! characteristics, hash-roll provides a few ways to use them.
@@ -24,6 +25,12 @@
 //! split. These don't include any mutable data, in other words: they don't keep track of what data
 //! is given to them. Configured Algorithm Instances provide the all-at-once APIs, as well as
 //! methods to obtain other kinds of APIs, like incrimental style apis.
+//!
+//! ```rust
+//! use hash_roll::ToChunkIncr;
+//! let algorithm_instance = hash_roll::mii::Mii::default();
+//! let _incrimental_comp = algorithm_instance.to_chunk_incr();
+//! ```
 //!
 //! ## CDC Algorithms and Window Buffering
 //!
@@ -312,7 +319,8 @@ pub trait Chunk {
     ///            // map `cut_point` from the current slice back into the original slice so we can
     ///            // have consistent indexes
     ///            let g_cut = cut_point + orig_data.len() - data.len();
-    ///            println!("chunk: {:?}", &orig_data[prev_cut..cut_point]);
+    ///            println!("chunk: {:?}", &orig_data[prev_cut..g_cut]);
+    ///            prev_cut = g_cut;
     ///        },
     ///        None => {
     ///            println!("no chunk, done with data we have");
