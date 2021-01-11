@@ -42,7 +42,7 @@ fmt-extra = "0.2"
 [dev-dependencies]
 rand = "0.7.3"
 histogram = "0.6"
-quickcheck = "0.9"
+quickcheck = "1.0"
 rollsum = "0.3"
 criterion = "0.3"
 rand_pcg = "0.2.1"
