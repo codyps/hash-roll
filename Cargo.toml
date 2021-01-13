@@ -40,7 +40,7 @@ fmt-extra = "0.2"
 #circbuf = "0.1.4"
 
 [dev-dependencies]
-rand = "0.7.3"
+rand = "0.8.2"
 histogram = "0.6"
 quickcheck = "0.9"
 rollsum = "0.3"
