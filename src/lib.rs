@@ -100,6 +100,7 @@
 
 use std::mem;
 
+pub mod bfbc;
 pub mod bup;
 pub mod buzhash;
 pub mod buzhash_table;
