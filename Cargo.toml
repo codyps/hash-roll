@@ -7,7 +7,7 @@ keywords = [ "hash", "rolling", "incremental", "split" , "cdc"]
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/jmesmon/hash-roll.git"
 documentation = "https://docs.rs/hash-roll"
-include = ["Cargo.toml", "**/*.rs", "README.md", "COMPARE.md"]
+include = ["**/*.rs", "README.md", "COMPARE.md"]
 edition = "2018"
 
 [features]
