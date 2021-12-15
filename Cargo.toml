@@ -21,7 +21,8 @@ default = [
 	"pigz",
 	"ram",
 	"zpaq",
-	"zstd"
+	"zstd",
+
 ]
 
 bup = []
@@ -34,6 +35,8 @@ pigz = []
 ram = []
 zpaq = []
 zstd = []
+
+slow_tests = []
 
 [dependencies]
 fmt-extra = "0.2"
