@@ -127,11 +127,11 @@ impl Default for RollSum {
     }
 }
 
-/// Incrimental instance of [`RollSum`]
+/// incremental instance of [`RollSum`]
 ///
 /// Performance note: Bup's Roll sum algorithm requires tracking the entire window. As a result,
 /// this includes a circular buffer which all inputs are copied through. If your use case allows
-/// it, use the non-incrimental variant for improved performance.
+/// it, use the non-incremental variant for improved performance.
 #[derive(Clone, PartialEq, Eq)]
 pub struct RollSumIncr {
     state: RollSumState,

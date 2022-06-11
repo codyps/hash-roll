@@ -111,7 +111,7 @@ impl<'a> From<&FastCdc<'a>> for FastCdcIncr<'a> {
     }
 }
 
-/// FastCdcIncr provides an incrimental interface to `FastCdc`
+/// FastCdcIncr provides an incremental interface to `FastCdc`
 ///
 /// This impl does not buffer data passing through it (the FastCDC algorithm does not require
 /// look-back) making it very efficient.

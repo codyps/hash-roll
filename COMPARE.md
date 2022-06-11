@@ -10,7 +10,7 @@
  - LMC (chunking)
  - RAM Chunking (Rapid  Asymmetric  Maximum)
    - doi:10.1016/j.future.2017.02.013 
- - MII (minimal incrimental interval)
+ - MII (minimal incremental interval)
    - doi:10.1109/access.2019.2926195 
  - [TTTD](https://scholarworks.sjsu.edu/cgi/viewcontent.cgi?referer=&httpsredir=1&article=1041&context=etd_projects)
  - [FBC](doi:10.1109/mascots.2010.37)
@@ -32,7 +32,7 @@
 
 # Impl Features
 
- - Incrimental input: rather than require a single `&[u8]` up front, allow
+ - incremental input: rather than require a single `&[u8]` up front, allow
    providing a number of `&[u8]`s over the life of the splitter/hasher.
 
  - Slice input vs byte-at-a-time: By allowing algorithms to take in larger
@@ -45,8 +45,8 @@
    - latest release: 2017-09-09
      - inactive development (as of 2020-06-21)
    - algorithm(s): "Rabin64" (polynomial based, 64-bit)
-   - incrimental input: no
-     - no documentation indicates incrimental input is possible
+   - incremental input: no
+     - no documentation indicates incremental input is possible
      - while one could use a special impl of `Iterator<Item=u8>` that can be
        extended, this would only work if the `SeperatorIter` or `ChunkIter` had
        not emitted a final incomplete chunk/seperator.
@@ -67,7 +67,7 @@
    - latest release: 2020-03-19, v1.0.3
      - active development (as of 2020-06-21)
    - algorithm(s): FastCDC
-   - incrimental input: no
+   - incremental input: no
    - api:
      - input: one `&[u8]`
      - output: `Iterator<Item=Chunk> where Chunk: (offset: usize, size:
@@ -82,7 +82,7 @@
    - latest release: 2018-12-17 v1.0.0 (no other releases)
      - inactive development (as of 2020-06-21)
    - algorithm(s): AE (with modifications/extensions)
-   - incrimental input: no
+   - incremental input: no
    - api:
      - input: one `&[u8]`
      - output: `Iterator<Item=&[u8]>`
@@ -96,7 +96,7 @@
    - latest release: 2020-04-12 v0.1.3
      - active development (as of 2020-06-21)
    - algorithm(s): gear
-   - incrimental input: yes
+   - incremental input: yes
    - provides simd & scalar impls
    - includes a static table for gearhash
    - api: call `next_match()` repeatedly with new slices. Returns a
@@ -130,7 +130,7 @@
    - algorithm(s):
      - rollsum (based on bupsplit, based on rsync chunking)
      - gear
-   - incrimental input: yes
+   - incremental input: yes
    - includes a static table for gearhash
    - low level trait has byte-by-byte and slice based interfaces
    - exposes conditionality of chunk edge (ie: like a rolling-sum) in trait,

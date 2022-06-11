@@ -14,7 +14,7 @@
 //!
 //! - Configured Algorithm Instance (impliments [`Chunk`]). Named plainly using the algorithm name
 //!  (like [`Bup`]). These can be thought of as "parameters" for an algorithm.
-//! - Incrimental (impliments [`ChunkIncr`]). Normally named with `Incr` suffix. These are created
+//! - incremental (impliments [`ChunkIncr`]). Normally named with `Incr` suffix. These are created
 //!   using [`ToChunkIncr`] for a configured algorithm instance.
 //!
 //! Because of the various ways one might use a CDC, and the different CDC algorithm
@@ -24,12 +24,12 @@
 //! algorithm. For example, this might mean configuring a window size or how to decide where to
 //! split. These don't include any mutable data, in other words: they don't keep track of what data
 //! is given to them. Configured Algorithm Instances provide the all-at-once APIs, as well as
-//! methods to obtain other kinds of APIs, like incrimental style apis.
+//! methods to obtain other kinds of APIs, like incremental style apis.
 //!
 //! ```rust
 //! use hash_roll::ToChunkIncr;
 //! let algorithm_instance = hash_roll::mii::Mii::default();
-//! let _incrimental_comp = algorithm_instance.to_chunk_incr();
+//! let _incremental_comp = algorithm_instance.to_chunk_incr();
 //! ```
 //!
 //! ## CDC Algorithms and Window Buffering
@@ -42,26 +42,26 @@
 //! For the window-buffering algorithms, their is an extra cost to certain types of API
 //! implimentations. The documentation will note when these occur and suggest alternatives.
 //!
-//! Generally, CDC interfaces that are incrimental will be slower for window-buffering algorithms.
+//! Generally, CDC interfaces that are incremental will be slower for window-buffering algorithms.
 //! Using an explicitly allocating interface (which emits `Vec<u8>` or `Vec<Vec<u8>>`) will have no
-//! worse performance that the incrimental API, but might be more convenient. Using an all-at-once
+//! worse performance that the incremental API, but might be more convenient. Using an all-at-once
 //! API will provide the best performance due to not requiring any buffering (the input data can be
 //! used directly).
 //!
 //! ## Use Cases that drive API choices
 //!
 //!  - accumulate vecs, emits vecs
-//!    - incrimental: yes
+//!    - incremental: yes
 //!    - input: `Vec<u8>`
 //!    - internal state: `Vec<Vec<u8>>`
 //!    - output: `Vec<Vec<u8>>`
 //!
 //!  - stream data through
-//!    - incrimenal: yes
+//!    - incremenal: yes
 //!    - input: `&[u8]`
 //!
 //!  - mmap (or read entire) file, emit
-//!    - incrimenal: no
+//!    - incremenal: no
 //!    - input: `&[u8]`
 //!    - output: `&[u8]`
 
@@ -71,7 +71,7 @@
 //
 //  - place methods that might have more optimized variants, but can have common implimentations,
 //    in a trait. This notably affects window-buffering differences: it's always possible to
-//    impliment all-at-once processing using incrimental interfaces that internally buffer, but
+//    impliment all-at-once processing using incremental interfaces that internally buffer, but
 //    it's much more efficient for window-buffering algorithms to provide implimentations that know
 //    how to look into the input data directly.
 
@@ -116,7 +116,7 @@ pub mod zstd;
 
 pub(crate) use range::RangeExt;
 
-/// Accept incrimental input and provide indexes of split points
+/// Accept incremental input and provide indexes of split points
 ///
 /// Compared to [`Chunk`], [`ChunkIncr`] allows avoiding having to buffer all input data in memory,
 /// and avoids the need to use a single buffer for storing the input data (even if all data is in
@@ -127,11 +127,11 @@ pub(crate) use range::RangeExt;
 /// (like `ZstdRsyncable` does). If you have multiple "sources", one should obtain new instances of
 /// [`ChunkIncr`] for each of them (typically via [`ToChunkIncr`]).
 ///
-/// Note that for some splitting/chunking algorithms, the incrimental api will be less efficient
-/// compared to the non-incrimental API. In particular, algorithms like [`Rsyncable`] that require
+/// Note that for some splitting/chunking algorithms, the incremental api will be less efficient
+/// compared to the non-incremental API. In particular, algorithms like [`Rsyncable`] that require
 /// the use of previously examined data to shift their "window" (resulting in needing a circular
 /// buffer which all inputed data passes through) will perform more poorly using [`ChunkIncr`]
-/// compared with non-incrimental interfaces
+/// compared with non-incremental interfaces
 pub trait ChunkIncr {
     /// The data "contained" within a implimentor of this trait is the history of all data slices
     /// passed to feed.
@@ -164,7 +164,7 @@ pub trait ChunkIncr {
     /// Does not return the remainder (if any) in the iteration. Use [`IterSlices::take_rem()`] or
     /// [`IterSlices::into_parts()`] to get the remainder.
     ///
-    /// Note that this is a non-incrimental interface. Calling this on an already fed chunker or using
+    /// Note that this is a non-incremental interface. Calling this on an already fed chunker or using
     /// this multiple times on the same chunker may provide unexpected results
     fn iter_slices_strict(self, data: &[u8]) -> IterSlicesStrict<'_, Self>
     where
@@ -374,14 +374,14 @@ pub trait Chunk {
 //
 // We could consider adding `type Incr` into `trait Chunk`, or only having `type Incr`
 pub trait ToChunkIncr {
-    /// `Incr` provides the incrimental interface to this chunking instance
+    /// `Incr` provides the incremental interface to this chunking instance
     type Incr: ChunkIncr;
 
-    /// `to_chunk_incr()` returns a [`ChunkIncr`] which can be incrimentally fed data and emits
+    /// `to_chunk_incr()` returns a [`ChunkIncr`] which can be incrementally fed data and emits
     /// chunks.
     ///
     /// Generally, this is a typically low cost operation that copies from the implimentor or does
     /// minor computation on its fields and may allocate some memory for storing additional state
-    /// needed for incrimental computation.
+    /// needed for incremental computation.
     fn to_chunk_incr(&self) -> Self::Incr;
 }
