@@ -168,9 +168,9 @@ impl Default for Zpaq {
     }
 }
 
-/// Incrimental instance of [`Zpaq`].
+/// incremental instance of [`Zpaq`].
 ///
-/// `Zpaq` doesn't require input look back, so the incrimental and non-incrimental performance
+/// `Zpaq` doesn't require input look back, so the incremental and non-incremental performance
 /// should be similar.
 #[derive(Debug)]
 pub struct ZpaqIncr {

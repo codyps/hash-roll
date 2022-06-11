@@ -1,7 +1,7 @@
 // check the following are equivalent:
 //  - find_chunk_edge() with 1 set of buffer sizes vs another set of buffer sizes
-//  - incrimental with 1 set of buffer sizes vs another set of buffer sizes
-//  - find_chunk_edge() vs incrimental
+//  - incremental with 1 set of buffer sizes vs another set of buffer sizes
+//  - find_chunk_edge() vs incremental
 //
 //  - simd vs non-simd algorithms
 

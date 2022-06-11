@@ -127,7 +127,7 @@ impl ZstdSearchState {
     }
 }
 
-/// Incrimental chunking using Zstd's rsyncable algorithm
+/// incremental chunking using Zstd's rsyncable algorithm
 ///
 /// Performance note: Zstd's chunking requires buffer look back to remove previously inserted data,
 /// and as a result requires `ZstdIncr` to maintain an internal buffer. This internal buffer may
