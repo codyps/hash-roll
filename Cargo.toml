@@ -44,7 +44,7 @@ rand = "0.7.3"
 histogram = "0.6"
 quickcheck = "0.9"
 rollsum = "0.3"
-criterion = "0.3"
+criterion = "0.4"
 rand_pcg = "0.2.1"
 proptest = "0.10.0"
 
