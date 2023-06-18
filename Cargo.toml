@@ -40,7 +40,6 @@ slow_tests = []
 
 [dependencies]
 fmt-extra = "0.2"
-#circbuf = "0.1.4"
 
 [dev-dependencies]
 rand = "0.8"
