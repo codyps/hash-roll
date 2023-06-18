@@ -84,8 +84,8 @@ macro_rules! test_find_chunk_edge {
                 let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
                 let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
                 let s3 = splits_incr(&chunker, &data[..]);
-                assert_eq!(s1, s2);
-                assert_eq!(s1, s3);
+                assert_eq!(s1, s2, "splits fce are not identical");
+                assert_eq!(s1, s3, "splits fce and incr are not identical");
             }
         }
         )*

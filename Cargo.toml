@@ -43,13 +43,13 @@ fmt-extra = "0.2"
 #circbuf = "0.1.4"
 
 [dev-dependencies]
-rand = "0.7.3"
-histogram = "0.6"
-quickcheck = "0.9"
+rand = "0.8"
+histogram = "0.7"
+quickcheck = "1"
 rollsum = "0.3"
-criterion = "0.3"
-rand_pcg = "0.2.1"
-proptest = "0.10.0"
+criterion = "0.5"
+rand_pcg = "0.3"
+proptest = "1"
 
 [[bench]]
 name = "compare"
