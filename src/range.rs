@@ -24,12 +24,12 @@ impl<T, R: std::ops::RangeBounds<T>> RangeExt<T> for R {
         T: PartialOrd<T>,
     {
         match self.end_bound() {
-            Included(ref i) => {
+            Included(i) => {
                 if item > i {
                     return true;
                 }
             }
-            Excluded(ref i) => {
+            Excluded(i) => {
                 if item >= i {
                     return true;
                 }
@@ -45,12 +45,12 @@ impl<T, R: std::ops::RangeBounds<T>> RangeExt<T> for R {
         T: PartialOrd<T>,
     {
         match self.start_bound() {
-            Included(ref i) => {
+            Included(i) => {
                 if item < i {
                     return true;
                 }
             }
-            Excluded(ref i) => {
+            Excluded(i) => {
                 if item <= i {
                     return true;
                 }

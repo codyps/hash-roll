@@ -110,10 +110,10 @@ pub mod gzip;
 pub mod mii;
 pub mod pigz;
 pub mod ram;
-pub mod range;
 pub mod zpaq;
 pub mod zstd;
 
+mod range;
 pub(crate) use range::RangeExt;
 
 /// Accept incrimental input and provide indexes of split points
@@ -287,9 +287,12 @@ pub trait Chunk {
 
     /// Find the next "chunk" in `data` to emit
     ///
-    /// The return value is a pair of a range representing the start and end of the chunk being
-    /// emitted, and the offset from which subsequent `data` subsets should be passed to the next
-    /// call to `find_chunk_edge`.
+    /// The return value is a tuple of:
+    ///
+    ///  1. an optional offset in `data` which is just after a chunk to be emitted (this is called
+    ///     the "cut point")
+    ///  2. the number of bytes to remove from the start of `data` before passing `data` to
+    ///     `find_chunk_edge()` again (this is called the "discard count")
     ///
     /// `state` is mutated so that it does not rexamine previously examined data, even when a chunk
     /// is not emitted.
@@ -312,9 +315,9 @@ pub trait Chunk {
     /// let mut prev_cut = 0;
     ///
     /// loop {
-    ///    let (chunk, discard_ct) = chunk.find_chunk_edge(&mut ss, data);
+    ///    let (cut_point_in_data, discard_ct) = chunk.find_chunk_edge(&mut ss, data);
     ///
-    ///    match chunk {
+    ///    match cut_point_in_data {
     ///        Some(cut_point) => {
     ///            // map `cut_point` from the current slice back into the original slice so we can
     ///            // have consistent indexes

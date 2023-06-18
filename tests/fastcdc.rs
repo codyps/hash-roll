@@ -10,16 +10,17 @@ struct Vec8K {
 }
 
 impl quickcheck::Arbitrary for Vec8K {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Self {
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        let mut data = Vec::arbitrary(g);
+
         // FIXME: the intention is to raise this >8KB, but that makes the tests take far too
         // long to run.
-        let l = 1 * 1024 + g.size();
+        while data.len() < 1024 {
+            let mut d2 = Vec::arbitrary(g);
+            data.append(&mut d2);
+        }
 
-        let mut d = vec![0; l];
-
-        g.fill_bytes(&mut d[..]);
-
-        Vec8K { data: d }
+        Vec8K { data }
     }
 
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {

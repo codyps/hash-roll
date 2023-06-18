@@ -332,7 +332,7 @@ impl fmt::Debug for BuzHashTableBufHash {
     }
 }
 
-impl<'a> From<Box<[u32; 256]>> for BuzHashTableBufHash {
+impl From<Box<[u32; 256]>> for BuzHashTableBufHash {
     fn from(table: Box<[u32; 256]>) -> Self {
         Self { table }
     }

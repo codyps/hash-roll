@@ -207,7 +207,7 @@ impl Chunk for Zpaq {
     ) -> (Option<usize>, usize) {
         for (i, v) in data.iter().enumerate() {
             let h = state.feed(*v);
-            if self.split_here(h, (state.idx + 1) as u64) {
+            if self.split_here(h, state.idx + 1) {
                 *state = self.to_search_state();
                 return (Some(i + 1), i + 1);
             }

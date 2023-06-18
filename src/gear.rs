@@ -72,14 +72,8 @@ impl<'a> ToChunkIncr for Gear32<'a> {
     type Incr = GearIncr32<'a>;
 
     fn to_chunk_incr(&self) -> Self::Incr {
-        self.into()
-    }
-}
-
-impl<'a> From<&Gear32<'a>> for GearIncr32<'a> {
-    fn from(params: &Gear32<'a>) -> Self {
-        Self {
-            params: params.clone(),
+        Self::Incr {
+            params: self.clone(),
             state: Default::default(),
         }
     }

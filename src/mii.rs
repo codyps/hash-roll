@@ -51,7 +51,12 @@ impl crate::Chunk for Mii {
     ) -> (Option<usize>, usize) {
         match state.push(data) {
             Some(v) => {
-                state.reset();
+                // NOTE: these check that we don't carry state across chunk boundaries. The
+                // original paper is unclear if this is _exactly_ the case, and there are no test
+                // vectors for MII. That said: given the goals, it's unlikely that `prev` should
+                // persist across chunks (as doing so would cause inconsistent chunking).
+                debug_assert_eq!(state.incr.prev, 0xff);
+                debug_assert_eq!(state.incr.increment, 0);
                 (Some(v), v)
             }
             None => (None, data.len()),
@@ -76,12 +81,6 @@ impl ToChunkIncr for Mii {
 #[derive(Debug)]
 pub struct MiiSearchState {
     incr: MiiIncr,
-}
-
-impl MiiSearchState {
-    fn reset(&mut self) {
-        self.incr.reset();
-    }
 }
 
 impl From<MiiIncr> for MiiSearchState {
@@ -127,7 +126,7 @@ impl ChunkIncr for MiiIncr {
                 if self.increment == self.w {
                     // this is a split
                     self.increment = 0;
-                    self.prev = 0;
+                    self.prev = 0xff;
                     return Some(i + 1);
                 }
             } else {
@@ -137,12 +136,5 @@ impl ChunkIncr for MiiIncr {
         }
 
         None
-    }
-}
-
-impl MiiIncr {
-    fn reset(&mut self) {
-        self.prev = 0xff;
-        self.increment = 0;
     }
 }

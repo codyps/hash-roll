@@ -1,0 +1,12 @@
+name: Auto-Merge
+on:
+  pull_request_target:
+
+jobs:
+  enable-auto-merge:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: alexwilson/enable-github-automerge-action@main
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
