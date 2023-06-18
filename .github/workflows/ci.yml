@@ -26,7 +26,8 @@ jobs:
           override: true
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2.4.0
+
 
       - name: Run all tests
         uses: actions-rs/cargo@v1
@@ -47,7 +48,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2.4.0
 
       - uses: actions-rs/cargo@v1
         with:
