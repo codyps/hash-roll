@@ -1,3 +1,4 @@
+// Upstream attribution and license terms: see THIRD-PARTY-NOTICES.
 /// An abitrary table originally produced for rsroll that is included here for convenience.
 pub static GEAR_64: [u64; 256] = [
     0xb088d3a9e840f559,

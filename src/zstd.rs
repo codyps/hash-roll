@@ -1,3 +1,4 @@
+// Upstream attribution and license terms: see THIRD-PARTY-NOTICES.
 #![cfg(feature = "zstd")]
 
 //! zstd's `--rsyncable` option performs content defined chunking

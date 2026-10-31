@@ -1,3 +1,4 @@
+// Upstream attribution and license terms: see THIRD-PARTY-NOTICES.
 #![cfg(feature = "pigz")]
 use crate::{Chunk, ChunkIncr, ToChunkIncr};
 

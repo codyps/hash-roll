@@ -1,3 +1,4 @@
+// Upstream attribution and license terms: see THIRD-PARTY-NOTICES.
 use crate::{Chunk, ChunkIncr, ToChunkIncr};
 use std::fmt;
 use std::num::Wrapping;

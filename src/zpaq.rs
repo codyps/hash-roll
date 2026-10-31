@@ -1,3 +1,4 @@
+// Upstream attribution and license terms: see THIRD-PARTY-NOTICES.
 #![cfg(feature = "zpaq")]
 
 //! `zpaq` impliments the chunking algorithm used in the zpaq archiving tool

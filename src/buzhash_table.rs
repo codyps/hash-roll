@@ -1,3 +1,4 @@
+// Upstream attribution and license terms: see THIRD-PARTY-NOTICES.
 /// https://github.com/silvasur/buzhash/blob/9bdec3dec7c611fa97beadc374d75bdf02cd880e/hash.go#L13-L57
 ///
 /// used by attic & attic-labs/nom
