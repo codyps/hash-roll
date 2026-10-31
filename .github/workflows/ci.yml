@@ -1,60 +1,53 @@
+name: ci
+
 on:
   push:
     branches-ignore:
       - '**.tmp'
+  pull_request:
+  workflow_dispatch:
 
-name: ci
+permissions:
+  contents: read
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust:
-          - stable
-          - beta
-          - nightly
-          - 1.47.0
-
+        rust: [stable, beta, nightly, '1.88.0']
     steps:
-      - uses: actions/checkout@v2
-
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
+      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+      - run: cargo test --all-features
+      - run: cargo check --all-targets --all-features
 
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v1
-
-      - name: Run all tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all
-  check:
-    runs-on: ubuntu-20.04
-
+  features:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+      - run: |
+          cargo test --no-default-features
+          for feature in bup buzhash fastcdc gear gzip mii pigz ram zpaq zstd; do
+            cargo test --no-default-features --features "$feature"
+          done
 
-      - uses: actions-rs/toolchain@v1
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          profile: minimal
-          toolchain: beta
-          override: true
           components: rustfmt, clippy
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v1
-
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
+      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo bench --bench compare -- --test
+      - run: cargo doc --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: -D warnings
