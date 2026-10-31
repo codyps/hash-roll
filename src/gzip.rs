@@ -62,6 +62,8 @@ pub struct GzipRsyncable {
 
 impl GzipRsyncable {
     pub fn with_window_and_modulus(window: usize, modulus: u64) -> GzipRsyncable {
+        assert!(window > 0, "window must not be empty");
+        assert!(modulus > 0, "modulus must be positive");
         Self {
             window_len: window,
             modulus,
@@ -87,6 +89,9 @@ impl Chunk for GzipRsyncable {
         state: &mut Self::SearchState,
         data: &[u8],
     ) -> (Option<usize>, usize) {
+        if data.is_empty() {
+            return (None, 0);
+        }
         for i in state.offset..data.len() {
             let v = data[i];
 

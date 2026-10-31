@@ -206,9 +206,12 @@ impl Chunk for Zpaq {
         state: &mut Self::SearchState,
         data: &[u8],
     ) -> (Option<usize>, usize) {
+        if data.is_empty() {
+            return (None, 0);
+        }
         for (i, v) in data.iter().enumerate() {
             let h = state.feed(*v);
-            if self.split_here(h, (state.idx + 1) as u64) {
+            if self.split_here(h, state.idx) {
                 *state = self.to_search_state();
                 return (Some(i + 1), i + 1);
             }

@@ -49,6 +49,9 @@ impl crate::Chunk for Mii {
         state: &mut Self::SearchState,
         data: &[u8],
     ) -> (Option<usize>, usize) {
+        if data.is_empty() {
+            return (None, 0);
+        }
         match state.push(data) {
             Some(v) => {
                 state.reset();
@@ -126,8 +129,7 @@ impl ChunkIncr for MiiIncr {
                 self.increment += 1;
                 if self.increment == self.w {
                     // this is a split
-                    self.increment = 0;
-                    self.prev = 0;
+                    self.reset();
                     return Some(i + 1);
                 }
             } else {

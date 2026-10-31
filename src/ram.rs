@@ -42,8 +42,11 @@ impl Chunk for Ram {
         state: &mut Self::SearchState,
         data: &[u8],
     ) -> (Option<usize>, usize) {
+        if data.is_empty() {
+            return (None, 0);
+        }
         match state.push(self, data) {
-            Some(i) => (Some(i + 1), i + 1),
+            Some(i) => (Some(i), i),
             None => (None, data.len()),
         }
     }
@@ -69,7 +72,7 @@ impl RamState {
                 if ri > params.w {
                     self.i = 0;
                     self.max_val = 0;
-                    return Some(l_i);
+                    return Some(l_i + 1);
                 }
 
                 self.max_val = b;

@@ -192,6 +192,9 @@ impl Chunk for Zstd {
         state: &mut Self::SearchState,
         data: &[u8],
     ) -> (Option<usize>, usize) {
+        if data.is_empty() {
+            return (None, 0);
+        }
         if state.offset < RSYNC_LENGTH {
             // push some data in
             let seed_b = &data[state.offset..std::cmp::min(RSYNC_LENGTH, data.len())];
@@ -212,7 +215,8 @@ impl Chunk for Zstd {
             let to_add = data[i];
             state.rotate(to_remove, to_add, self.prime_power);
             if state.at_split(self) {
-                let discard_ct = data.len().saturating_sub(RSYNC_LENGTH);
+                let discard_ct = (i + 1).saturating_sub(RSYNC_LENGTH);
+                state.offset = i + 1 - discard_ct;
                 return (Some(i + 1), discard_ct);
             }
         }
@@ -257,7 +261,7 @@ impl ChunkIncr for ZstdIncr {
 
             if self.state.at_split(&self.params) {
                 // NOTE: don't clear window
-                return Some(i + use_len);
+                return Some(i + use_len + 1);
             }
         }
 

@@ -31,6 +31,7 @@ impl ToChunkIncr for RollSum {
 
 impl RollSum {
     pub fn with_window(window_len: usize) -> Self {
+        assert!(window_len > 0, "window must not be empty");
         Self { window_len }
     }
 }
@@ -47,6 +48,9 @@ impl Chunk for RollSum {
         state: &mut Self::SearchState,
         data: &[u8],
     ) -> (Option<usize>, usize) {
+        if data.is_empty() {
+            return (None, 0);
+        }
         for i in state.offset..data.len() {
             let a = data[i];
             let d = if i >= self.window_len {
@@ -199,7 +203,7 @@ impl RollSumIncr {
         let w = self.window[self.wofs.0];
         self.add(w, ch);
         self.window[self.wofs.0] = ch;
-        self.wofs = Wrapping((self.wofs + Wrapping(1)).0 & (self.window.len() - 1));
+        self.wofs = Wrapping((self.wofs.0 + 1) % self.window.len());
     }
 
     #[cfg(test)]
@@ -227,6 +231,9 @@ impl ChunkIncr for RollSumIncr {
         for (i, &v) in data.iter().enumerate() {
             self.roll_byte(v);
             if self.at_split() {
+                self.state.reset(&RollSum::with_window(self.window.len()));
+                self.window.fill(0);
+                self.wofs = Wrapping(0);
                 return Some(i + 1);
             }
         }
@@ -303,6 +310,7 @@ mod test {
             match v1 {
                 None => break,
                 Some(v) => {
+                    rollsum::Engine::reset(&mut m2);
                     x = &x[v..];
                 }
             }

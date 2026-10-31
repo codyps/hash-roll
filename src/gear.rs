@@ -57,6 +57,9 @@ impl<'a> Chunk for Gear32<'a> {
         state: &mut Self::SearchState,
         data: &[u8],
     ) -> (Option<usize>, usize) {
+        if data.is_empty() {
+            return (None, 0);
+        }
         for (i, v) in data.iter().enumerate() {
             if state.push(self, *v) {
                 *state = self.to_search_state();
@@ -111,7 +114,7 @@ impl<'a> ChunkIncr for GearIncr32<'a> {
         for (i, v) in data.iter().enumerate() {
             if self.state.push(&self.params, *v) {
                 self.state.reset();
-                return Some(i);
+                return Some(i + 1);
             }
         }
 
@@ -120,6 +123,10 @@ impl<'a> ChunkIncr for GearIncr32<'a> {
 }
 
 fn msb_mask(log2: usize) -> u32 {
+    assert!(
+        (1..32).contains(&log2),
+        "average size exponent must be in 1..32"
+    );
     // at least 1 bit & not all the bits
     // FIXME: probably could relax those requirements with better math.
     //debug_assert!(log2 > 0);

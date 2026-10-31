@@ -57,9 +57,8 @@ fn o1_qc() {
 fn o1_8k_seed(state: u128) {
     use rand::RngCore;
     let l = 8 * 1024 * 1024 + 1;
-    let mut d = Vec::with_capacity(l);
-    let c = d.capacity();
-    unsafe { d.set_len(c) };
+    let mut d = vec![0; l];
+    let c = d.len();
     println!("seed: {:#x}", state);
     println!("len: {}", c);
     let mut rng = Pcg64::new(state, 0xa02bdbf7bb3c0a7ac28fa16a64abf96);
@@ -143,14 +142,14 @@ fn fast_cdc_8kb(src: &[u8]) -> usize {
     for i in (MIN_SIZE as usize)..normal_size {
         fp = (fp << 1) + Wrapping(GEAR_64[src[i] as usize]);
         if (fp.0 & MASK_S) == 0 {
-            return i;
+            return i + 1;
         }
     }
 
     for i in normal_size..n {
         fp = (fp << 1) + Wrapping(GEAR_64[src[i] as usize]);
         if (fp.0 & MASK_L) == 0 {
-            return i;
+            return i + 1;
         }
     }
 

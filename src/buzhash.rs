@@ -89,6 +89,7 @@ impl<H: BuzHashHash> BuzHash<H> {
     /// `hash` is applied to each byte of input prior to mixing into the rolling hash.
     pub fn new(capacity: usize, mask: u32, hash: H, max_chunk_size: u64) -> Self {
         assert!(capacity > 0);
+        assert!(max_chunk_size > 0, "maximum chunk size must be positive");
         BuzHash {
             k: capacity,
             h: hash,
@@ -130,23 +131,17 @@ impl<H: BuzHashHash + Clone> Chunk for BuzHash<H> {
         state: &mut Self::SearchState,
         data: &[u8],
     ) -> (Option<usize>, usize) {
+        if data.is_empty() {
+            return (None, 0);
+        }
         for i in state.offset..data.len() {
             state.state.add_buf(data, self, i);
+            state.input_idx += 1;
 
-            if (state.state.h & self.mask) == self.mask {
+            if (state.state.h & self.mask) == self.mask || state.input_idx >= self.max_chunk_size {
                 state.reset();
                 return (Some(i + 1), i + 1);
             }
-
-            /*
-             * broken: `i` is not the number of bytes since prev chunk.
-             * need to track internal last chunk
-            if i as u64 > self.max_chunk_size {
-                state.reset();
-                println!(" <- CHUNK: {}", i + 1);
-                return (Some(i + 1), i + 1);
-            }
-            */
         }
 
         // keep k elements = discard all but k
@@ -172,12 +167,14 @@ impl<H: BuzHashHash + Clone> ToChunkIncr for BuzHash<H> {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BuzHashSearchState {
     offset: usize,
+    input_idx: u64,
     state: BuzHashState,
 }
 
 impl BuzHashSearchState {
     fn reset(&mut self) {
         self.offset = 0;
+        self.input_idx = 0;
         self.state.reset();
     }
 }
@@ -214,7 +211,7 @@ impl BuzHashState {
     fn add_overflow<H: BuzHashHash>(&mut self, params: &BuzHash<H>, add_v: u8, remove_v: u8) {
         let h = self.h.rotate_left(1);
         // need to find and "remove" a entry
-        let drop = params.h.hash(remove_v).rotate_left((params.k % 8) as u32);
+        let drop = params.h.hash(remove_v).rotate_left((params.k % 32) as u32);
         self.h = h ^ drop ^ params.h.hash(add_v);
     }
 }
@@ -245,7 +242,7 @@ impl<H: BuzHashHash> ChunkIncr for BuzHashIncr<H> {
                 return Some(i + 1);
             }
 
-            if self.input_idx > self.params.max_chunk_size {
+            if self.input_idx >= self.params.max_chunk_size {
                 self.reset();
                 return Some(i + 1);
             }

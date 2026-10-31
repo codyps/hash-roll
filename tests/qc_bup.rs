@@ -33,6 +33,7 @@ quickcheck! {
 
             let v1 = v1.unwrap();
 
+            rollsum::Engine::reset(&mut m2);
             x = &x[v1..];
             if x.len() == 0 {
                 return true

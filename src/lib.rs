@@ -140,7 +140,10 @@ pub trait ChunkIncr {
     /// point to split.
     ///
     /// Returns None if the data has no split point.
-    /// Otherwise, returns an index in the most recently passed `data`.
+    /// Otherwise, returns the exclusive end offset of the chunk in `data`,
+    /// in `1..=data.len()`. The bytes through that offset have been consumed.
+    /// If `None` is returned, all bytes in `data` have been consumed. Empty
+    /// input must return `None` and must not change the state.
     ///
     /// Note that returning the index in the current slice makes most "look-ahead" splitting
     /// impossible (as it is permissible to pass 1 byte at a time).
@@ -171,6 +174,7 @@ pub trait ChunkIncr {
         Self: std::marker::Sized,
     {
         IterSlicesStrict {
+            done: false,
             rem: data,
             chunker: self,
         }
@@ -182,6 +186,7 @@ pub trait ChunkIncr {
 /// Always emits _complete_ slices durring iteration.
 #[derive(Debug)]
 pub struct IterSlicesStrict<'a, C: ChunkIncr> {
+    done: bool,
     rem: &'a [u8],
     chunker: C,
 }
@@ -206,8 +211,14 @@ impl<'a, C: ChunkIncr> Iterator for IterSlicesStrict<'a, C> {
     type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.done || self.rem.is_empty() {
+            return None;
+        }
         match self.chunker.push(self.rem) {
-            None => None,
+            None => {
+                self.done = true;
+                None
+            }
             Some(l) => {
                 let (v, rn) = self.rem.split_at(l);
                 self.rem = rn;
@@ -287,9 +298,11 @@ pub trait Chunk {
 
     /// Find the next "chunk" in `data` to emit
     ///
-    /// The return value is a pair of a range representing the start and end of the chunk being
-    /// emitted, and the offset from which subsequent `data` subsets should be passed to the next
-    /// call to `find_chunk_edge`.
+    /// Returns an optional exclusive chunk end offset in `1..=data.len()` and
+    /// a discard count in `0..=data.len()`. Remove exactly the discard count
+    /// from the start of the buffer before calling again. On a split, the
+    /// discard count cannot exceed the chunk end; retained bytes may be
+    /// needed as a rolling window. An empty input returns `(None, 0)`.
     ///
     /// `state` is mutated so that it does not rexamine previously examined data, even when a chunk
     /// is not emitted.
@@ -324,7 +337,7 @@ pub trait Chunk {
     ///        },
     ///        None => {
     ///            println!("no chunk, done with data we have");
-    ///            println!("remain: {:?}", &data[discard_ct..]);
+    ///            println!("remain: {:?}", &orig_data[prev_cut..]);
     ///            break;
     ///        }
     ///    }

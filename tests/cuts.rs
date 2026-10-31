@@ -21,7 +21,11 @@ fn cut_test_incr<C: ChunkIncr>(seed: u128, size: usize, chunker: C, expected_spl
         let mut last_split = 0;
         for (i, v) in buf.iter().enumerate() {
             match incr.push(&[*v]) {
-                Some(_split_point) => {
+                Some(split_point) => {
+                    assert_eq!(
+                        split_point, 1,
+                        "one-byte input must return an exclusive offset"
+                    );
                     let sp = i + 1;
                     incr_splits.push(sp - last_split);
                     last_split = sp;
@@ -79,7 +83,11 @@ fn cut_test_sz<C: Chunk + ToChunkIncr>(
         let mut last_split = 0;
         for (i, v) in buf.iter().enumerate() {
             match incr.push(&[*v]) {
-                Some(_split_point) => {
+                Some(split_point) => {
+                    assert_eq!(
+                        split_point, 1,
+                        "one-byte input must return an exclusive offset"
+                    );
                     let sp = i + 1;
                     incr_splits.push(sp - last_split);
                     last_split = sp;

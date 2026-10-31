@@ -75,16 +75,25 @@ impl<'a> Chunk for FastCdc<'a> {
         state: &mut Self::SearchState,
         data: &[u8],
     ) -> (Option<usize>, usize) {
+        if data.is_empty() {
+            return (None, 0);
+        }
         match state.push(self, data) {
-            Some(i) => (Some(i + 1), i + 1),
+            Some(i) => (Some(i), i),
             None => (None, data.len()),
         }
     }
 }
 
 impl<'a> FastCdc<'a> {
-    /// Create a custom FastCDC instance
+    /// Create a custom FastCDC instance.
+    ///
+    /// Panics unless `0 < min_size <= normal_size <= max_size`.
     pub fn new(gear: &'a [u64; 256], min_size: u64, normal_size: u64, max_size: u64) -> Self {
+        assert!(
+            min_size > 0 && min_size <= normal_size && normal_size <= max_size,
+            "expected 0 < min_size <= normal_size <= max_size"
+        );
         Self {
             gear,
             min_size,
@@ -141,73 +150,32 @@ impl FastCdcState {
     }
 
     fn push(&mut self, params: &FastCdc<'_>, data: &[u8]) -> Option<usize> {
-        // global start/index
-        let mut gi = self.l;
-        // global end
-        let ge = data.len() as u64 + gi;
-
-        if ge <= params.min_size {
-            // No split, no processing of data, but we've "consumed" the bytes.
-            self.l = ge;
+        if data.is_empty() {
             return None;
         }
-
-        // skip elements prior to MIN_SIZE and track offset of new `data` in argument `data` for
-        // return value
-        let mut i = if gi <= params.min_size {
-            let skip = params.min_size - gi;
-            gi += skip;
-            skip
-        } else {
-            0
-        } as usize;
-
-        let mut fp = self.fp;
-
-        loop {
-            if i >= data.len() {
-                break;
-            }
-            if gi >= params.normal_size {
-                // go to next set of matches
-                break;
-            }
-
-            let v = data[i];
-            fp = (fp << 1) + Wrapping(params.gear[v as usize]);
-            if (fp.0 & MASK_S) == 0 {
-                self.reset();
-                return Some(i);
-            }
-
-            gi += 1;
-            i += 1;
+        // Bytes before the minimum size do not participate in the fingerprint.
+        let skip = params
+            .min_size
+            .saturating_sub(self.l)
+            .min(data.len() as u64) as usize;
+        self.l += skip as u64;
+        if self.l == params.max_size {
+            self.reset();
+            return Some(skip);
         }
-
-        loop {
-            if gi >= params.max_size {
-                // no match found, emit fixed match at MAX_SIZE
+        for (i, &byte) in data.iter().enumerate().skip(skip) {
+            self.fp = (self.fp << 1) + Wrapping(params.gear[byte as usize]);
+            self.l += 1;
+            let mask = if self.l <= params.normal_size {
+                MASK_S
+            } else {
+                MASK_L
+            };
+            if self.fp.0 & mask == 0 || self.l == params.max_size {
                 self.reset();
-                return Some(i);
+                return Some(i + 1);
             }
-            if i >= data.len() {
-                break;
-            }
-
-            let v = data[i];
-            fp = (fp << 1) + Wrapping(params.gear[v as usize]);
-            if (fp.0 & MASK_L) == 0 {
-                self.reset();
-                return Some(i);
-            }
-
-            gi += 1;
-            i += 1;
         }
-
-        // no match, but not at MAX_SIZE yet, so store context for next time.
-        self.fp = fp;
-        self.l = ge;
 
         None
     }

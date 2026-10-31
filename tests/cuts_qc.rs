@@ -1,216 +1,149 @@
-// check the following are equivalent:
-//  - find_chunk_edge() with 1 set of buffer sizes vs another set of buffer sizes
-//  - incrimental with 1 set of buffer sizes vs another set of buffer sizes
-//  - find_chunk_edge() vs incrimental
-//
-//  - simd vs non-simd algorithms
-
-use hash_roll::Chunk;
+//! Check both APIs against each other, including fragmented input and repeated splits.
+use hash_roll::{Chunk, ChunkIncr, ToChunkIncr};
 use proptest::prelude::*;
 
-fn splits_fce<C: Chunk>(chunker: &C, buf: &[u8], buf_sizes: &[usize]) -> Vec<usize> {
+fn splits_fce<C: Chunk>(chunker: &C, data: &[u8], sizes: &[usize]) -> Vec<usize> {
+    let mut state = chunker.to_search_state();
     let mut splits = Vec::new();
-    let mut i = 0;
-    let mut ss = chunker.to_search_state();
-    let mut last_split_point = 0;
-    let mut curr_discard = 0;
-    let mut prev_buf_size = 0;
+    let mut start = 0;
+    let mut end = 0;
+    let mut reads = 0;
     loop {
-        if buf.len() == curr_discard {
-            break;
-        }
-
-        // use adative methods to ensure buf size grows
-        let buf_size = buf_sizes[i % buf_sizes.len()] + prev_buf_size;
-        i += 1;
-        let buf_size = std::cmp::min(buf_size, buf.len() - curr_discard);
-
-        let b = &buf[curr_discard..(buf_size + curr_discard)];
-        println!(
-            "{{ PRE: curr_discard: {}, buf_size: {}",
-            curr_discard, buf_size
-        );
-        let (split, discard_ct) = chunker.find_chunk_edge(&mut ss, b);
-        println!(
-            "}} POST: discard_ct: {}, next_discard: {}",
-            discard_ct,
-            curr_discard + discard_ct
-        );
-
-        match split {
-            Some(split_point) => {
-                // `split_point` is translated into the entire buffer (from the one passed to fce),
-                // and the length is determined by tracking the previous split.
-                let split_point_global = curr_discard + split_point;
-                let split_len = split_point_global - last_split_point;
-                splits.push(split_len);
-                last_split_point = split_point_global;
-                prev_buf_size = 0;
+        let (cut, discard) = chunker.find_chunk_edge(&mut state, &data[start..end]);
+        assert!(discard <= end - start);
+        if let Some(cut) = cut {
+            assert!((1..=end - start).contains(&cut));
+            assert!(discard <= cut);
+            let global = start + cut;
+            assert!(splits.last().map_or(true, |&prev| global > prev));
+            splits.push(global);
+            start += discard;
+        } else {
+            start += discard;
+            if end == data.len() {
+                break;
             }
-            None => {
-                // at end of buffer without a split point
-                if buf_size == (buf.len() - curr_discard) {
-                    break;
-                }
-
-                prev_buf_size = buf_size;
-            }
+            end = (end + sizes[reads % sizes.len()]).min(data.len());
+            reads += 1;
         }
-
-        curr_discard += discard_ct;
-        println!("-- curr_discard = {}", curr_discard);
     }
-
     splits
 }
 
-proptest! {
-    #[test]
-    #[cfg(feature = "gzip")]
-    fn gzip_fce_self_consistent_with_varying_buf_size(
-        data in prop::collection::vec(0u8..=255u8, 0..10000),
-        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
-        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
-    {
-        let chunker = hash_roll::gzip::GzipRsyncable::default();
-        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
-        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
-        assert_eq!(s1, s2);
+fn splits_incr<C: ToChunkIncr>(chunker: &C, data: &[u8], sizes: &[usize]) -> Vec<usize> {
+    let mut incr = chunker.to_chunk_incr();
+    let mut splits = Vec::new();
+    let mut pos = 0;
+    let mut reads = 0;
+    while pos < data.len() {
+        let end = (pos + sizes[reads % sizes.len()]).min(data.len());
+        reads += 1;
+        while pos < end {
+            assert_eq!(incr.push(&[]), None);
+            match incr.push(&data[pos..end]) {
+                Some(cut) => {
+                    assert!((1..=end - pos).contains(&cut));
+                    pos += cut;
+                    splits.push(pos);
+                }
+                None => pos = end,
+            }
+        }
     }
+    assert_eq!(incr.push(&[]), None);
+    splits
+}
 
-    #[test]
-    #[cfg(feature = "mii")]
-    fn mii_fce_self_consistent_with_varying_buf_size(
-        data in prop::collection::vec(0u8..=255u8, 0..10000),
-        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
-        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
-    {
-        let chunker = hash_roll::mii::Mii::default();
-        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
-        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
-        assert_eq!(s1, s2);
-    }
+fn check<C: Chunk + ToChunkIncr>(chunker: C, data: &[u8], sizes: &[usize]) {
+    let all = [data.len().max(1)];
+    let expected = splits_fce(&chunker, data, &all);
+    assert_eq!(expected, splits_fce(&chunker, data, sizes));
+    assert_eq!(expected, splits_incr(&chunker, data, &all));
+    assert_eq!(expected, splits_incr(&chunker, data, sizes));
+    let mut offset = 0;
+    let actual: Vec<_> = chunker
+        .to_chunk_incr()
+        .iter_slices_strict(data)
+        .map(|s| {
+            assert!(!s.is_empty());
+            offset += s.len();
+            offset
+        })
+        .collect();
+    assert_eq!(expected, actual);
+    let slices: Vec<_> = chunker.to_chunk_incr().iter_slices(data).collect();
+    assert!(slices.iter().all(|s| !s.is_empty()));
+    assert_eq!(slices.concat(), data);
+}
 
-    #[test]
-    #[cfg(feature = "buzhash_big")]
-    fn buzhash_fce_self_consistent_with_varying_buf_size(
-        seed: u8,
-        data in prop::collection::vec(0u8..=255u8, 0..10000),
-        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
-        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
-    {
-        let chunker = hash_roll::buzhash::BuzHash::new_nom(seed);
-        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
-        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
-        assert_eq!(s1, s2);
-    }
+macro_rules! consistency {
+    ($feature:literal, $name:ident, $chunker:expr) => {
+        #[cfg(feature = $feature)]
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(64))]
+            #[test]
+            fn $name(data in prop::collection::vec(any::<u8>(), 0..32768),
+                     sizes in prop::collection::vec(1usize..4096, 1..16)) {
+                check($chunker, &data, &sizes);
+            }
+        }
+    };
+}
 
-    #[test]
-    #[cfg(feature = "buzhash")]
-    fn buzhash_short_fce_self_consistent_with_varying_buf_size(
-        data in prop::collection::vec(0u8..=255u8, 0..100),
-        buf_sizes_1 in prop::collection::vec(1usize..100, 1..100),
-        buf_sizes_2 in prop::collection::vec(1usize..100, 1..100))
-    {
-        let chunker = hash_roll::buzhash::BuzHash::new(
-            7,
-            (1 << 4u32) - 1,
-            hash_roll::buzhash::BuzHashTableByteSaltHash::from((0, &hash_roll::buzhash_table::GO_BUZHASH)),
-            1 << 10,
-        );
-        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
-        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
-        assert_eq!(s1, s2);
-    }
+consistency!("bup", bup, hash_roll::bup::RollSum::default());
+consistency!(
+    "bup",
+    bup_odd_window,
+    hash_roll::bup::RollSum::with_window(7)
+);
+consistency!("buzhash", buzhash, hash_roll::buzhash::BuzHash::new_nom(0));
+consistency!(
+    "buzhash",
+    buzhash_max,
+    hash_roll::buzhash::BuzHash::new(
+        9,
+        u32::MAX,
+        hash_roll::buzhash::BuzHashTableHash::from(&hash_roll::buzhash_table::GO_BUZHASH),
+        257
+    )
+);
+consistency!("fastcdc", fastcdc, hash_roll::fastcdc::FastCdc::default());
+consistency!(
+    "fastcdc",
+    fastcdc_small,
+    hash_roll::fastcdc::FastCdc::new(&hash_roll::gear_table::GEAR_64, 8, 16, 64)
+);
+consistency!(
+    "gear",
+    gear,
+    hash_roll::gear::Gear32::with_average_size_log2(8)
+);
+consistency!(
+    "gzip",
+    gzip,
+    hash_roll::gzip::GzipRsyncable::with_window_and_modulus(31, 256)
+);
+consistency!("mii", mii, hash_roll::mii::Mii::with_w(3));
+consistency!("pigz", pigz, hash_roll::pigz::PigzRsyncable::with_bits(8));
+consistency!("ram", ram, hash_roll::ram::Ram::with_w(64));
+consistency!(
+    "zpaq",
+    zpaq,
+    hash_roll::zpaq::Zpaq::with_average_and_range(16, 16..512)
+);
+consistency!(
+    "zstd",
+    zstd,
+    hash_roll::zstd::Zstd::with_target_section_size(1 << 20)
+);
 
-    #[test]
-    #[cfg(feature = "zpaq")]
-    fn zpaq_fce_self_consistent_with_varying_buf_size(
-        data in prop::collection::vec(0u8..=255u8, 0..10000),
-        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
-        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
-    {
-        let chunker = hash_roll::zpaq::Zpaq::with_average_size_pow_2(13);
-        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
-        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
-        assert_eq!(s1, s2);
-    }
-
-    #[test]
-    #[cfg(feature = "pigz")]
-    fn pigz_fce_self_consistent_with_varying_buf_size(
-        data in prop::collection::vec(0u8..=255u8, 0..10000),
-        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
-        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
-    {
-        let chunker = hash_roll::pigz::PigzRsyncable::default();
-        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
-        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
-        assert_eq!(s1, s2);
-    }
-
-    #[test]
-    #[cfg(feature = "bup")]
-    fn bup_fce_self_consistent_with_varying_buf_size(
-        data in prop::collection::vec(0u8..=255u8, 0..10000),
-        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
-        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
-    {
-        let chunker = hash_roll::bup::RollSum::default();
-        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
-        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
-        assert_eq!(s1, s2);
-    }
-
-    #[test]
-    #[cfg(feature = "zstd")]
-    fn zstd_fce_self_consistent_with_varying_buf_size(
-        data in prop::collection::vec(0u8..=255u8, 0..100000),
-        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
-        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
-    {
-        let chunker = hash_roll::zstd::Zstd::default();
-        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
-        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
-        assert_eq!(s1, s2);
-    }
-
-    #[test]
-    #[cfg(feature = "gear")]
-    fn gear_fce_self_consistent_with_varying_buf_size(
-        data in prop::collection::vec(0u8..=255u8, 0..100000),
-        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
-        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
-    {
-        let chunker = hash_roll::gear::Gear32::default();
-        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
-        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
-        assert_eq!(s1, s2);
-    }
-
-    #[test]
-    #[cfg(feature = "fastcdc")]
-    fn fastcdc_fce_self_consistent_with_varying_buf_size(
-        data in prop::collection::vec(0u8..=255u8, 0..100000),
-        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
-        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
-    {
-        let chunker = hash_roll::fastcdc::FastCdc::default();
-        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
-        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
-        assert_eq!(s1, s2);
-    }
-
-    #[test]
-    #[cfg(feature = "ram")]
-    fn ram_fce_self_consistent_with_varying_buf_size(
-        data in prop::collection::vec(0u8..=255u8, 0..100000),
-        buf_sizes_1 in prop::collection::vec(1usize..5000, 1..10000),
-        buf_sizes_2 in prop::collection::vec(1usize..5000, 1..10000))
-    {
-        let chunker = hash_roll::ram::Ram::with_w(8192);
-        let s1 = splits_fce(&chunker, &data[..], &buf_sizes_1[..]);
-        let s2 = splits_fce(&chunker, &data[..], &buf_sizes_2[..]);
-        assert_eq!(s1, s2);
-    }
+#[cfg(feature = "zstd")]
+#[test]
+fn zstd_multiple_boundaries() {
+    use rand::RngCore;
+    let mut data = vec![0; 8 << 20];
+    rand_pcg::Pcg64::new(0, 1).fill_bytes(&mut data);
+    let chunker = hash_roll::zstd::Zstd::with_target_section_size(1 << 20);
+    assert!(splits_fce(&chunker, &data, &[data.len()]).len() > 1);
+    check(chunker, &data, &[7, 65536, 131072]);
 }

@@ -14,6 +14,7 @@ pub struct PigzRsyncable {
 
 impl PigzRsyncable {
     pub fn with_bits(bits: u8) -> PigzRsyncable {
+        assert!((1..32).contains(&bits), "bits must be in 1..32");
         let mask = (1 << bits) - 1;
         let hit = mask >> 1;
         PigzRsyncable { bits, mask, hit }
@@ -38,6 +39,9 @@ impl Chunk for PigzRsyncable {
         state: &mut Self::SearchState,
         data: &[u8],
     ) -> (Option<usize>, usize) {
+        if data.is_empty() {
+            return (None, 0);
+        }
         for (i, v) in data.iter().enumerate() {
             if state.state.add(self, *v) {
                 *state = self.to_search_state();
