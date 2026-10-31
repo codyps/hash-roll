@@ -3,10 +3,10 @@
 
 //! zstd's `--rsyncable` option performs content defined chunking
 //!
-//! This has been minimally validated to match the implimentation from zstd, with the following
+//! This has been minimally validated to match the implementation from zstd, with the following
 //! caveats:
 //!
-//!   - Maximum chunk size is not implimented
+//!   - Maximum chunk size is not implemented
 //!   - Only 1 test case with a single chunk edge (ie: 2 chunks) has been tested
 //!
 //! It uses a internal [rolling
@@ -128,7 +128,7 @@ impl ZstdSearchState {
     }
 }
 
-/// Incrimental chunking using Zstd's rsyncable algorithm
+/// Incremental chunking using Zstd's rsyncable algorithm
 ///
 /// Performance note: Zstd's chunking requires buffer look back to remove previously inserted data,
 /// and as a result requires `ZstdIncr` to maintain an internal buffer. This internal buffer may

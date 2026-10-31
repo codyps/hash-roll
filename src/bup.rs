@@ -1,4 +1,5 @@
 // Upstream attribution and license terms: see THIRD-PARTY-NOTICES.
+#![cfg(feature = "bup")]
 use crate::{Chunk, ChunkIncr, ToChunkIncr};
 use std::fmt;
 use std::num::Wrapping;
@@ -11,10 +12,10 @@ const WINDOW_SIZE: usize = 1 << (WINDOW_BITS as usize);
 
 const ROLLSUM_CHAR_OFFSET: usize = 31;
 
-/// Rolling sum used by [`Bup`] for splitting
+/// Rolling sum used by [`RollSum`] for splitting
 ///
-/// - https://github.com/bup/bup/blob/0ab7c3a958729b4723e6fe254da771aff608c2bf/lib/bup/bupsplit.c
-/// - https://github.com/bup/bup/blob/0ab7c3a958729b4723e6fe254da771aff608c2bf/lib/bup/bupsplit.h
+/// - <https://github.com/bup/bup/blob/0ab7c3a958729b4723e6fe254da771aff608c2bf/lib/bup/bupsplit.c>
+/// - <https://github.com/bup/bup/blob/0ab7c3a958729b4723e6fe254da771aff608c2bf/lib/bup/bupsplit.h>
 ///
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RollSum {
@@ -89,7 +90,7 @@ impl From<&RollSum> for RollSumState {
         let ws = Wrapping(s.window_len as u32);
         // NOTE: bup uses this initialization, but librsync uses zeros.
         //
-        // I believe the idea is to allow a slightly different implimentation of the "setup"
+        // I believe the idea is to allow a slightly different implementation of the "setup"
         // portion of the processing (ie: before the window is filled)
         Self {
             s1: ws * Wrapping(ROLLSUM_CHAR_OFFSET as u32),
@@ -132,11 +133,11 @@ impl Default for RollSum {
     }
 }
 
-/// Incrimental instance of [`RollSum`]
+/// Incremental instance of [`RollSum`]
 ///
 /// Performance note: Bup's Roll sum algorithm requires tracking the entire window. As a result,
 /// this includes a circular buffer which all inputs are copied through. If your use case allows
-/// it, use the non-incrimental variant for improved performance.
+/// it, use the non-incremental variant for improved performance.
 #[derive(Clone, PartialEq, Eq)]
 pub struct RollSumIncr {
     state: RollSumState,
@@ -245,7 +246,7 @@ impl ChunkIncr for RollSumIncr {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rand::RngCore;
+    use rand::Rng;
     use rollsum::Engine;
 
     #[test]
@@ -272,7 +273,7 @@ mod test {
 
         assert_eq!(m1.digest(), m2.digest());
 
-        let mut r = rand::thread_rng();
+        let mut r = rand::rng();
         let mut b = [0u8; 2048];
 
         r.fill_bytes(&mut b);
@@ -296,15 +297,15 @@ mod test {
         let mut m1 = RollSumIncr::default();
         let mut m2 = rollsum::Bup::default();
 
-        let mut r = rand::thread_rng();
+        let mut r = rand::rng();
         let mut b = [0u8; 2048];
 
         r.fill_bytes(&mut b);
 
         let mut x = &b[..];
         loop {
-            let v1 = m1.push(&x);
-            let v2 = m2.find_chunk_edge(&x);
+            let v1 = m1.push(x);
+            let v2 = m2.find_chunk_edge(x);
             assert_eq!(v1, v2.map(|x| x.0));
 
             match v1 {

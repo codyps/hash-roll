@@ -3,7 +3,7 @@
 //! FastCDC is a chunking algorithm using some features from [Gear](super::gear)
 //!
 //! Reference:
-//!  - https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf
+//!  - <https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf>
 
 use crate::{Chunk, ChunkIncr, ToChunkIncr};
 use std::fmt;
@@ -120,7 +120,7 @@ impl<'a> From<&FastCdc<'a>> for FastCdcIncr<'a> {
     }
 }
 
-/// FastCdcIncr provides an incrimental interface to `FastCdc`
+/// FastCdcIncr provides an incremental interface to `FastCdc`
 ///
 /// This impl does not buffer data passing through it (the FastCDC algorithm does not require
 /// look-back) making it very efficient.

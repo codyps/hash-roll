@@ -1,3 +1,16 @@
+#![cfg(any(
+    feature = "bup",
+    feature = "buzhash",
+    feature = "fastcdc",
+    feature = "gear",
+    feature = "gzip",
+    feature = "mii",
+    feature = "pigz",
+    feature = "ram",
+    feature = "zpaq",
+    feature = "zstd"
+))]
+
 //! Check both APIs against each other, including fragmented input and repeated splits.
 use hash_roll::{Chunk, ChunkIncr, ToChunkIncr};
 use proptest::prelude::*;
@@ -15,7 +28,7 @@ fn splits_fce<C: Chunk>(chunker: &C, data: &[u8], sizes: &[usize]) -> Vec<usize>
             assert!((1..=end - start).contains(&cut));
             assert!(discard <= cut);
             let global = start + cut;
-            assert!(splits.last().map_or(true, |&prev| global > prev));
+            assert!(splits.last().is_none_or(|&prev| global > prev));
             splits.push(global);
             start += discard;
         } else {
@@ -140,7 +153,7 @@ consistency!(
 #[cfg(feature = "zstd")]
 #[test]
 fn zstd_multiple_boundaries() {
-    use rand::RngCore;
+    use rand::Rng;
     let mut data = vec![0; 8 << 20];
     rand_pcg::Pcg64::new(0, 1).fill_bytes(&mut data);
     let chunker = hash_roll::zstd::Zstd::with_target_section_size(1 << 20);

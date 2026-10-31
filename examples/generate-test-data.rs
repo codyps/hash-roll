@@ -1,4 +1,4 @@
-use rand::RngCore;
+use rand::Rng;
 use rand_pcg::Pcg64;
 use std::io::Write;
 

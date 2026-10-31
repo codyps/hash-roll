@@ -12,7 +12,7 @@ use crate::{Chunk, ChunkIncr, ToChunkIncr};
 
 /// Parameters for the Rapid Asymmetric Maximum (RAM) chunking algorithm
 ///
-/// Is window free, with very small (
+/// Requires no look-back buffer and keeps only a byte maximum and byte count.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ram {
     /// window size
@@ -57,7 +57,7 @@ pub struct RamState {
     /// global index (number of processed bytes since split)
     i: u64,
 
-    ///
+    /// Largest byte seen in the current chunk.
     max_val: u8,
 }
 

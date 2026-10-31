@@ -1,5 +1,18 @@
+#![cfg(any(
+    feature = "bup",
+    feature = "buzhash",
+    feature = "fastcdc",
+    feature = "gear",
+    feature = "gzip",
+    feature = "mii",
+    feature = "pigz",
+    feature = "ram",
+    feature = "zpaq",
+    feature = "zstd"
+))]
+
 use hash_roll::{Chunk, ChunkIncr, ToChunkIncr};
-use rand::RngCore;
+use rand::Rng;
 use rand_pcg::Pcg64;
 
 fn test_data(seed: u128, size: usize) -> Vec<u8> {
@@ -9,6 +22,7 @@ fn test_data(seed: u128, size: usize) -> Vec<u8> {
     buf
 }
 
+#[cfg(feature = "fastcdc")]
 fn cut_test_incr<C: ChunkIncr>(seed: u128, size: usize, chunker: C, expected_splits: &[usize]) {
     let buf = test_data(seed, size);
 
@@ -20,17 +34,14 @@ fn cut_test_incr<C: ChunkIncr>(seed: u128, size: usize, chunker: C, expected_spl
         let buf = &buf[..];
         let mut last_split = 0;
         for (i, v) in buf.iter().enumerate() {
-            match incr.push(&[*v]) {
-                Some(split_point) => {
-                    assert_eq!(
-                        split_point, 1,
-                        "one-byte input must return an exclusive offset"
-                    );
-                    let sp = i + 1;
-                    incr_splits.push(sp - last_split);
-                    last_split = sp;
-                }
-                None => {}
+            if let Some(split_point) = incr.push(&[*v]) {
+                assert_eq!(
+                    split_point, 1,
+                    "one-byte input must return an exclusive offset"
+                );
+                let sp = i + 1;
+                incr_splits.push(sp - last_split);
+                last_split = sp;
             }
         }
     }
@@ -82,17 +93,14 @@ fn cut_test_sz<C: Chunk + ToChunkIncr>(
         let buf = &buf[..];
         let mut last_split = 0;
         for (i, v) in buf.iter().enumerate() {
-            match incr.push(&[*v]) {
-                Some(split_point) => {
-                    assert_eq!(
-                        split_point, 1,
-                        "one-byte input must return an exclusive offset"
-                    );
-                    let sp = i + 1;
-                    incr_splits.push(sp - last_split);
-                    last_split = sp;
-                }
-                None => {}
+            if let Some(split_point) = incr.push(&[*v]) {
+                assert_eq!(
+                    split_point, 1,
+                    "one-byte input must return an exclusive offset"
+                );
+                let sp = i + 1;
+                incr_splits.push(sp - last_split);
+                last_split = sp;
             }
         }
     }
@@ -101,6 +109,17 @@ fn cut_test_sz<C: Chunk + ToChunkIncr>(
     assert_eq!(expected_splits, &splits[..]);
 }
 
+#[cfg(any(
+    feature = "bup",
+    feature = "buzhash",
+    feature = "fastcdc",
+    feature = "gear",
+    feature = "gzip",
+    feature = "mii",
+    feature = "pigz",
+    feature = "ram",
+    feature = "zpaq"
+))]
 fn cut_test<C: Chunk + ToChunkIncr>(seed: u128, chunker: C, expected_splits: &[usize]) {
     cut_test_sz(seed, 8192 * 4, chunker, expected_splits)
 }

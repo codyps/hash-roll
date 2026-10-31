@@ -5,7 +5,7 @@ use crate::{ChunkIncr, ToChunkIncr};
 /// in Data Synchronization," in IEEE Access, vol. 7, pp. 86932-86945, 2019, doi:
 /// 10.1109/ACCESS.2019.2926195.
 ///
-/// https://ieeexplore.ieee.org/abstract/document/8752387
+/// <https://ieeexplore.ieee.org/abstract/document/8752387>
 #[derive(Debug, Clone)]
 pub struct Mii {
     w: u64,

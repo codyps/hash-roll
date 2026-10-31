@@ -10,14 +10,15 @@ struct Vec8K {
 }
 
 impl quickcheck::Arbitrary for Vec8K {
-    fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Self {
-        // FIXME: the intention is to raise this >8KB, but that makes the tests take far too
-        // long to run.
-        let l = 1 * 1024 + g.size();
+    fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+        // Include inputs above the minimum and maximum chunk sizes.
+        let l = 1024 + <u16 as quickcheck::Arbitrary>::arbitrary(g) as usize;
 
         let mut d = vec![0; l];
 
-        g.fill_bytes(&mut d[..]);
+        for byte in &mut d {
+            *byte = <u8 as quickcheck::Arbitrary>::arbitrary(g);
+        }
 
         Vec8K { data: d }
     }
@@ -39,14 +40,14 @@ fn oracle_1(d: Vec8K) -> bool {
 
 fn oracle_1_test(data: &[u8]) {
     let mut cdc = FastCdcIncr::default();
-    let v1 = fast_cdc_8kb(&data[..]);
-    let v2 = cdc.push(&data[..]).unwrap_or(0);
+    let v1 = fast_cdc_8kb(data);
+    let v2 = cdc.push(data).unwrap_or(0);
     assert_eq!(v1, v2);
 }
 
 #[test]
 fn o1_empty() {
-    oracle_1_test(&vec![0]);
+    oracle_1_test(&[0]);
 }
 
 #[test]
@@ -55,7 +56,7 @@ fn o1_qc() {
 }
 
 fn o1_8k_seed(state: u128) {
-    use rand::RngCore;
+    use rand::Rng;
     let l = 8 * 1024 * 1024 + 1;
     let mut d = vec![0; l];
     let c = d.len();
@@ -86,27 +87,28 @@ fn o1_8k_t2() {
 
 #[test]
 fn feed_until_5_chunks() {
-    use rand::RngCore;
+    use rand::Rng;
     let mut cdc = FastCdcIncr::default();
     let mut ct = 0;
-    let mut rng = ::rand::thread_rng();
+    let mut rng = ::rand::rng();
     let mut d = [0u8; 256];
     rng.fill_bytes(&mut d);
     loop {
         rng.fill_bytes(&mut d);
         let mut data = &d[..];
         loop {
-            let p = cdc.push(&data[..]);
+            let p = cdc.push(data);
             println!("p: {:?}, cdc: {:?}", p, cdc);
 
-            if p == None || p.unwrap() == data.len() {
-                break;
-            } else {
-                ct += 1;
-                if ct > 5 {
-                    return;
+            match p {
+                Some(cut) => {
+                    ct += 1;
+                    if ct >= 5 {
+                        return;
+                    }
+                    data = &data[cut..];
                 }
-                data = &data[p.unwrap()..];
+                None => break,
             }
         }
     }

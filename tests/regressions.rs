@@ -1,4 +1,23 @@
-use hash_roll::{Chunk, ChunkIncr, ToChunkIncr};
+#![cfg(any(
+    feature = "bup",
+    feature = "buzhash",
+    feature = "fastcdc",
+    feature = "gear",
+    feature = "mii",
+    feature = "ram",
+    feature = "zpaq"
+))]
+
+use hash_roll::ToChunkIncr;
+#[cfg(any(
+    feature = "buzhash",
+    feature = "fastcdc",
+    feature = "gear",
+    feature = "mii",
+    feature = "ram",
+    feature = "zpaq"
+))]
+use hash_roll::{Chunk, ChunkIncr};
 
 #[test]
 #[cfg(feature = "gear")]
@@ -101,7 +120,7 @@ fn bup_non_power_two_window() {
 #[cfg(feature = "buzhash")]
 fn buzhash_window_rotation() {
     let table = hash_roll::buzhash_table::GO_BUZHASH;
-    use rand::RngCore;
+    use rand::Rng;
     let mut data = vec![0u8; 4096];
     rand_pcg::Pcg64::new(0, 1).fill_bytes(&mut data);
     let k = 9;

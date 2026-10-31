@@ -1,5 +1,5 @@
 // Upstream attribution and license terms: see THIRD-PARTY-NOTICES.
-/// https://github.com/silvasur/buzhash/blob/9bdec3dec7c611fa97beadc374d75bdf02cd880e/hash.go#L13-L57
+/// <https://github.com/silvasur/buzhash/blob/9bdec3dec7c611fa97beadc374d75bdf02cd880e/hash.go#L13-L57>
 ///
 /// used by attic & attic-labs/nom
 pub const GO_BUZHASH: [u32; 256] = [
@@ -37,7 +37,7 @@ pub const GO_BUZHASH: [u32; 256] = [
     0x6a68ccfd, 0x62529f0b, 0xec5f36d6, 0x766cceda, 0x96ca63ef, 0xa0499838, 0xd9030f59, 0x8185f4d2,
 ];
 
-/// https://github.com/borgbackup/borg/blob/master/src/borg/_chunker.c#L30-L64
+/// <https://github.com/borgbackup/borg/blob/master/src/borg/_chunker.c#L30-L64>
 ///
 /// Note that borg does not use this directly, it xors it with a 32bit seed prior to use
 pub const BORG_BUZHASH_BASE: [u32; 256] = [

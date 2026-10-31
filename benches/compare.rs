@@ -1,204 +1,91 @@
-/*
- */
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use hash_roll::{ChunkIncr, Splitter};
-use rand;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use hash_roll::{Chunk, ChunkIncr, ToChunkIncr};
+use rand::Rng;
+use std::hint::black_box;
 
-/*
-pub fn split_hashmap<F, I>(b: &mut Criterion, bytes: usize, init: F)
-    where F: Fn(&[u8]) -> I,
-          I: FnMut() -> Option<usize>
-{
-    use rand::RngCore;
-    use std::collections::HashMap;
-    let mut rng = rand::thread_rng();
-    let mut d = vec![0u8; bytes];
-    let mut lenghts = HashMap::new();
-    b.iter(|| {
-        rng.fill_bytes(&mut d);
-
-        let mut i = init(&d[..]);
-        loop {
-            match i() {
-                Some(l) => {
-                    let mut v = lenghts.entry(l).or_insert(0u64);
-                    *v = *v + 1;
-                },
-                None => {
-                    break;
-                }
-            }
-        }
-    })
-
-    /* TODO: analize length data */
-}
-*/
-
-/*
-pub fn split<F>(b: &mut Criterion, bytes: usize, _name: &'static str, init: F)
-    where for<'a> F: Fn(&'a [u8]) -> Box<FnMut() -> Option<u64> + 'a>
-{
-    use rand::RngCore;
-    let mut rng = rand::thread_rng();
-    let mut d = vec![0u8; bytes];
-    b.iter(|| {
-        rng.fill_bytes(&mut d);
-        let mut i = test::black_box(init(&d[..]));
-        loop {
-            match test::black_box(i()) {
-                None => {
-                    break;
-                },
-                _ => {},
-            }
-        }
-    });
-}
-*/
-
-pub fn split_histogram<F>(c: &mut Criterion, bytes: usize, name: &'static str, init: F)
-where
-    for<'a> F: Fn(&'a [u8]) -> Box<dyn FnMut() -> Option<u64> + 'a>,
-{
-    use histogram::*;
-    use rand::RngCore;
-    use rand::SeedableRng;
-    let mut rng = rand_pcg::Pcg64::from_rng(rand::thread_rng()).unwrap();
-    let mut d = vec![0u8; bytes];
-    rng.fill_bytes(&mut d);
-    let mut lenghts = Histogram::new();
-    c.bench_function(name, |b| {
+fn compare<C: Chunk + ToChunkIncr>(c: &mut Criterion, name: &str, chunker: C, data: &[u8]) {
+    let mut group = c.benchmark_group(name);
+    group.throughput(Throughput::Bytes(data.len() as u64));
+    group.bench_with_input(BenchmarkId::new("slice", data.len()), data, |b, data| {
         b.iter(|| {
-            let mut i = black_box(init(&d[..]));
+            let mut state = chunker.to_search_state();
+            let mut remaining = black_box(data);
+            let mut chunks = 0;
             loop {
-                match black_box(i()) {
-                    Some(l) => {
-                        lenghts.increment(l).unwrap();
-                    }
-                    None => {
-                        break;
+                let (cut, discard) = chunker.find_chunk_edge(&mut state, remaining);
+                if cut.is_none() {
+                    break;
+                }
+                chunks += 1;
+                remaining = &remaining[discard..];
+            }
+            black_box(chunks)
+        });
+    });
+    group.bench_with_input(
+        BenchmarkId::new("incremental", data.len()),
+        data,
+        |b, data| {
+            b.iter(|| {
+                let mut chunker = chunker.to_chunk_incr();
+                let mut chunks = 0;
+                for block in black_box(data).chunks(4096) {
+                    let mut remaining = block;
+                    while let Some(cut) = chunker.push(remaining) {
+                        chunks += 1;
+                        remaining = &remaining[cut..];
                     }
                 }
-            }
-        })
-    });
-
-    /* FIXME: for some reason cargo runs this outer code many times over instead of just running
-     * the inner code many times over, causing this info to be printied far to much.
-     */
-    /*
-    println!("{}({} bytes) p50: {} bytes, p90: {} bytes, p99: {} bytes, p999: {} bytes",
-        name, bytes,
-        lenghts.percentile(50.0).unwrap(),
-        lenghts.percentile(90.0).unwrap(),
-        lenghts.percentile(99.0).unwrap(),
-        lenghts.percentile(99.9).unwrap(),
+                black_box(chunks)
+            });
+        },
     );
-    */
+    group.finish();
 }
 
-/* 4 MiB */
-const BENCH_BYTES: usize = 1024 * 1024 / 2;
-
-//const BENCH_RANGE : Range<usize> = Range { first: Bound::Unbounded, last: Bound::Unbounded };
-
-fn bench_rsyncable_vecs(c: &mut Criterion) {
-    use rand::RngCore;
-    let mut rng = rand::thread_rng();
-    let mut d = vec![0u8; BENCH_BYTES];
-    c.bench_function("rsyncable vecs", |b| {
-        b.iter(|| {
-            rng.fill_bytes(&mut d);
-            let s = hash_roll::rsyncable::Rsyncable::default().into_vecs(d.iter().cloned());
-            for _ in s {}
-        })
-    });
+fn benchmarks(c: &mut Criterion) {
+    let mut data = vec![0; 1 << 20];
+    rand_pcg::Pcg64::new(0, 1).fill_bytes(&mut data);
+    #[cfg(feature = "bup")]
+    compare(c, "bup", hash_roll::bup::RollSum::default(), &data);
+    #[cfg(feature = "bup")]
+    {
+        let mut group = c.benchmark_group("bup_reference");
+        group.throughput(Throughput::Bytes(data.len() as u64));
+        group.bench_function("rollsum", |b| {
+            b.iter(|| {
+                let mut chunker = rollsum::Bup::default();
+                let mut remaining = black_box(data.as_slice());
+                let mut chunks = 0;
+                while let Some((cut, _)) = chunker.find_chunk_edge(remaining) {
+                    chunks += 1;
+                    remaining = &remaining[cut..];
+                    rollsum::Engine::reset(&mut chunker);
+                }
+                black_box(chunks)
+            })
+        });
+        group.finish();
+    }
+    #[cfg(feature = "buzhash")]
+    compare(c, "buzhash", hash_roll::buzhash::BuzHash::new_nom(0), &data);
+    #[cfg(feature = "fastcdc")]
+    compare(c, "fastcdc", hash_roll::fastcdc::FastCdc::default(), &data);
+    #[cfg(feature = "gear")]
+    compare(c, "gear", hash_roll::gear::Gear32::default(), &data);
+    #[cfg(feature = "gzip")]
+    compare(c, "gzip", hash_roll::gzip::GzipRsyncable::default(), &data);
+    #[cfg(feature = "mii")]
+    compare(c, "mii", hash_roll::mii::Mii::default(), &data);
+    #[cfg(feature = "pigz")]
+    compare(c, "pigz", hash_roll::pigz::PigzRsyncable::default(), &data);
+    #[cfg(feature = "ram")]
+    compare(c, "ram", hash_roll::ram::Ram::with_w(8192), &data);
+    #[cfg(feature = "zpaq")]
+    compare(c, "zpaq", hash_roll::zpaq::Zpaq::default(), &data);
+    #[cfg(feature = "zstd")]
+    compare(c, "zstd", hash_roll::zstd::Zstd::default(), &data);
 }
 
-fn bench_rsyncable_slices(c: &mut Criterion) {
-    use rand::RngCore;
-    let mut rng = rand::thread_rng();
-    let mut d = vec![0u8; BENCH_BYTES];
-    c.bench_function("rsyncable slices", |b| {
-        b.iter(|| {
-            rng.fill_bytes(&mut d);
-            let s = hash_roll::rsyncable::Rsyncable::default().into_slices(&d[..]);
-            for _ in s {}
-        })
-    });
-}
-
-fn bench_zpaq(b: &mut Criterion) {
-    split_histogram(b, BENCH_BYTES, "bench_zpaq", |data| {
-        let z = hash_roll::zpaq::Zpaq::default();
-        let mut c = &data[..];
-        Box::new(move || {
-            let (a, b) = z.split(c);
-            if b.is_empty() || a.is_empty() {
-                None
-            } else {
-                c = b;
-                Some(b.len() as u64)
-            }
-        })
-    });
-}
-
-fn bench_zpaq_iter_slice(b: &mut Criterion) {
-    split_histogram(b, BENCH_BYTES, "zpaq_iter_slice", |data| {
-        let z = hash_roll::zpaq::Zpaq::default();
-        let mut zi = z.into_slices(data);
-        Box::new(move || zi.next().map(|x| x.len() as u64))
-    })
-}
-
-fn bench_zpaq_iter_vec(b: &mut Criterion) {
-    split_histogram(b, BENCH_BYTES, "zpaq_iter_vec", |data| {
-        let z = hash_roll::zpaq::Zpaq::default();
-        let mut zi = z.into_vecs(data.iter().cloned());
-        Box::new(move || zi.next().map(|x| x.len() as u64))
-    })
-}
-
-fn bench_rollsum_bup(b: &mut Criterion) {
-    split_histogram(b, BENCH_BYTES, "rollsum_bup", |data| {
-        let mut z = rollsum::Bup::default();
-        let mut pos = 0;
-        Box::new(move || {
-            let l = z.find_chunk_edge(&data[pos..]).map(|x| (x as u64) + 1);
-            match l {
-                Some(x) => pos += x as usize,
-                None => {}
-            }
-            l
-        })
-    })
-}
-
-fn bench_bup(b: &mut Criterion) {
-    split_histogram(b, BENCH_BYTES, "bup", |data| {
-        let mut z = hash_roll::bup::RollSumIncr::default();
-        let mut pos = 0;
-        Box::new(move || {
-            let l = z.push(&data[pos..]);
-            match l {
-                Some(x) => pos += x,
-                None => {}
-            }
-            l.map(|x| x as u64)
-        })
-    })
-}
-
-criterion_group!(
-    benches,
-    bench_bup,
-    bench_rollsum_bup,
-    bench_rsyncable_vecs,
-    bench_zpaq,
-    bench_zpaq_iter_vec,
-    bench_zpaq_iter_slice,
-    bench_rsyncable_slices
-);
+criterion_group!(benches, benchmarks);
 criterion_main!(benches);

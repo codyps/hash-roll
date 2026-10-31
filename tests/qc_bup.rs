@@ -20,14 +20,14 @@ quickcheck! {
 
         let mut x = &xs[..];
         loop {
-            let v1 = m1.push(&x);
-            let v2 = m2.find_chunk_edge(&x);
+            let v1 = m1.push(x);
+            let v2 = m2.find_chunk_edge(x);
 
             if v1 != v2.map(|x| x.0) {
                 return false
             }
 
-            if v1 == None {
+            if v1.is_none() {
                 return true
             }
 
@@ -35,7 +35,7 @@ quickcheck! {
 
             rollsum::Engine::reset(&mut m2);
             x = &x[v1..];
-            if x.len() == 0 {
+            if x.is_empty() {
                 return true
             }
         }
@@ -46,8 +46,8 @@ fn chk_a(x: &[u8]) {
     let mut m1 = hash_roll::bup::RollSumIncr::default();
     let mut m2 = rollsum::Bup::default();
 
-    let v1 = m1.push(&x);
-    let v2 = m2.find_chunk_edge(&x);
+    let v1 = m1.push(x);
+    let v2 = m2.find_chunk_edge(x);
 
     assert_eq!(v1, v2.map(|x| x.0));
 }

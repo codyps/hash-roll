@@ -4,9 +4,9 @@
 //!
 //! BuzHash with various chunk-splitting methods is used in:
 //!   - [Borg](https://github.com/borgbackup/borg)
-//!      - https://github.com/borgbackup/borg/blob/master/src/borg/_chunker.c
+//!      - <https://github.com/borgbackup/borg/blob/master/src/borg/_chunker.c>
 //!   - [Attic](https://github.com/jborg/attic)
-//!     - https://github.com/jborg/attic/blob/master/attic/_chunker.c
+//!     - <https://github.com/jborg/attic/blob/master/attic/_chunker.c>
 //!   - [silvasur/buzhash](https://github.com/silvasur/buzhash), in turn used in:
 //!     - [attic-labs/nom](https://github.com/attic-labs/noms/blob/26620a34bc8c95812037588869d4790b5581b34d/go/types/rolling_value_hasher.go#L15-L21)
 //!     - [dolt](https://github.com/liquidata-inc/dolt)
@@ -51,7 +51,7 @@ use std::num::Wrapping;
 ///
 /// Uses fixed 32-bit width for the hash.
 ///
-/// The trait [`BuzHashHash`] provides the internal hash function, see the implimentations of it
+/// The trait [`BuzHashHash`] provides the internal hash function, see the implementations of it
 /// for built-in hash options (which include both `Borg` and `silvasur/buzhash`'s internal hash
 /// tables).
 ///
@@ -76,7 +76,7 @@ pub struct BuzHash<H: BuzHashHash> {
     /// (called `pattern` in `attic-labs/nom`)
     mask: u32,
 
-    /// if the index grows _above_ this size, a chunk edge is formed
+    /// A chunk edge is forced when this many bytes have been consumed.
     max_chunk_size: u64,
 }
 
@@ -329,7 +329,7 @@ impl fmt::Debug for BuzHashTableBufHash {
     }
 }
 
-impl<'a> From<Box<[u32; 256]>> for BuzHashTableBufHash {
+impl From<Box<[u32; 256]>> for BuzHashTableBufHash {
     fn from(table: Box<[u32; 256]>) -> Self {
         Self { table }
     }

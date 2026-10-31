@@ -11,7 +11,7 @@ use std::num::Wrapping;
 ///  Xia, W., Jiang, H., Feng, D., Tian, L., Fu, M., and Zhou, Y. Ddelta: A dedulication-inspired
 ///  fast delta compression approach. Performance Evaluation 79 (2014), 258-271.
 ///
-///  http://wxia.hustbackup.cn/pub/DElta-PEVA-2014.pdf
+///  <http://wxia.hustbackup.cn/pub/DElta-PEVA-2014.pdf>
 #[derive(Clone)]
 pub struct Gear32<'a> {
     /// A mask with an appropriate number of bits set for the desired average chunk size.

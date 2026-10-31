@@ -5,7 +5,7 @@
 //! **WARNING: not validated against gzip or rsyncrypto algorithms. Output may change to fix bugs**
 //!
 //! A widely distributed patch for gzip adds a `--rsyncable` flag which causes `gzip` to split it's
-//! input on "stable" boundaries. This module impliments the algorithm used in that patch.
+//! input on "stable" boundaries. This module implements the algorithm used in that patch.
 //!
 //! The same algorithm is used by the `rsyncrypto` project.
 //!
@@ -21,12 +21,12 @@
 //! Parameters:
 //!
 //!  - window-len: The maximum number of bytes to be examined when deciding to split a block.
-//!              set to 8192 by default in gzip-rsyncable & rsyncrypto)
+//!    set to 8192 by default in gzip-rsyncable & rsyncrypto)
 //!  - modulus:    set to half of window-len (so, 4096) in gzip-rsyncable & rsyncrypto.
 //!
 //! In-block state:
 //!  - window of window-len bytes (use of the iterator interface means we also track more bytes than
-//!      this)
+//!    this)
 //!  - sum (u64)
 //!
 //! Between-block state:
@@ -35,8 +35,8 @@
 //!
 //! References:
 //!
-//! - http://rsyncrypto.lingnu.com/index.php/Algorithm
-//! - https://www.samba.org/~tridge/phd_thesis.pdf
+//! - <http://rsyncrypto.lingnu.com/index.php/Algorithm>
+//! - <https://www.samba.org/~tridge/phd_thesis.pdf>
 //!
 //! S(n) = sum(c_i, var=i, top=n, bottom=n-8196)
 //!

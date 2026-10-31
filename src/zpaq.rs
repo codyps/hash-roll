@@ -1,7 +1,7 @@
 // Upstream attribution and license terms: see THIRD-PARTY-NOTICES.
 #![cfg(feature = "zpaq")]
 
-//! `zpaq` impliments the chunking algorithm used in the zpaq archiving tool
+//! `zpaq` implements the chunking algorithm used in the zpaq archiving tool
 
 use std::fmt;
 use std::num::Wrapping;
@@ -22,16 +22,16 @@ use std::ops::RangeBounds;
  *
  * References:
  *
- *  - http://encode.ru/threads/456-zpaq-updates?p=45192&viewfull=1#post45192
- *  - https://github.com/klauspost/dedup/blob/master/writer.go#L668, 'zpaqWriter'
- *  - https://github.com/zpaq/zpaq/blob/master/zpaq.cpp
+ *  - <http://encode.ru/threads/456-zpaq-updates?p=45192&viewfull=1#post45192>
+ *  - <https://github.com/klauspost/dedup/blob/master/writer.go#L668>, 'zpaqWriter'
+ *  - <https://github.com/zpaq/zpaq/blob/master/zpaq.cpp>
  *
  * Parameters:
  *
  *  - fragment (aka average_size_pow_2): average size = 2**fragment KiB
- *      in Zpaq (the compressor), this defaults to 6
+ *    in Zpaq (the compressor), this defaults to 6
  *  - min_size, max_size: additional bounds on the blocks. Not technically needed for the algorithm
- *      to function
+ *    to function
  *
  *  In Zpaq-compressor, min & max size are calculated using the fragment value
  *  In go's dedup, fragment is calculated using a min & max size
@@ -169,9 +169,9 @@ impl Default for Zpaq {
     }
 }
 
-/// Incrimental instance of [`Zpaq`].
+/// Incremental instance of [`Zpaq`].
 ///
-/// `Zpaq` doesn't require input look back, so the incrimental and non-incrimental performance
+/// `Zpaq` doesn't require input look back, so the incremental and non-incremental performance
 /// should be similar.
 #[derive(Debug)]
 pub struct ZpaqIncr {
