@@ -22,8 +22,16 @@ A returned offset is the exclusive end of a chunk in the current input slice.
 
 See [CHANGELOG.md](CHANGELOG.md) for changes to chunk boundaries and licensing.
 Run `cargo bench --bench compare` to compare slice and incremental throughput
-for every enabled algorithm. Benchmark input generation runs outside the timed
-section.
+for every enabled algorithm, plus a `rollsum` Bup reference. Workloads include
+seeded random bytes, zeros, repeated patterns, repository source text, and a copy
+of the random input with insertions, replacements, and deletions.
+
+The benchmark prints complete-chunk counts, minimum/mean/median/p95/maximum
+lengths, incomplete-tail sizes, and the fraction of edited-input bytes reusable
+as exact chunks from the original. Corpus generation, these summaries, and
+chunker construction run outside the timed measurements. To measure a subset,
+use a Criterion filter, for example `cargo bench --bench compare -- zpaq/`.
+CI runs `--test` smoke checks; these do not produce performance estimates.
 
 ## Metrics
 

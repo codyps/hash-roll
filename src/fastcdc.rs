@@ -1,6 +1,6 @@
 #![cfg(feature = "fastcdc")]
 
-//! FastCDC is a chunking algorithm using some features from [Gear](super::gear)
+//! FastCDC is a chunking algorithm using a Gear rolling fingerprint.
 //!
 //! Reference:
 //!  - <https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf>

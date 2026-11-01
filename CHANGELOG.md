@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Normalize Zpaq configuration to byte units, correct its default maximum to
+  508 KiB, and respect inclusive and exclusive length bounds. Maximum-based
+  constructors now support small and non-power-of-two sizes without floating
+  point calculations or overflow. Invalid configurations are rejected explicitly.
+- Restrict MII's consecutive-increment parameter to the reachable range 1..=255.
+- Independently test Zpaq size guarantees, byte-unit conversions, predictor
+  cutoffs, range normalization, and MII's supported parameter boundaries.
+- Benchmark multiple input types and edited copies, report chunk-size
+  distributions and exact chunk reuse, and exclude setup from timed batches.
+- Run release tests plus feature-specific Clippy and documentation checks in CI,
+  including benchmarks with no algorithm features enabled.
+
 - License hash-roll's original code under OSL-3.0 and include upstream notices.
 - Return exclusive chunk end offsets consistently from both chunking APIs.
   Correct Gear, FastCDC, RAM, and Zstd incremental offsets, including FastCDC's
