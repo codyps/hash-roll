@@ -8,7 +8,12 @@
     feature = "pigz",
     feature = "ram",
     feature = "zpaq",
-    feature = "zstd"
+    feature = "zstd",
+    feature = "rabin",
+    feature = "ae",
+    feature = "gear64",
+    feature = "seqcdc",
+    feature = "leap"
 ))]
 
 //! Check both APIs against each other, including fragmented input and repeated splits.
@@ -87,6 +92,7 @@ fn check<C: Chunk + ToChunkIncr>(chunker: C, data: &[u8], sizes: &[usize]) {
     let slices: Vec<_> = chunker.to_chunk_incr().iter_slices(data).collect();
     assert!(slices.iter().all(|s| !s.is_empty()));
     assert_eq!(slices.concat(), data);
+    assert_eq!(chunker.chunks(data).collect::<Vec<_>>(), slices);
 }
 
 macro_rules! consistency {
@@ -160,3 +166,40 @@ fn zstd_multiple_boundaries() {
     assert!(splits_fce(&chunker, &data, &[data.len()]).len() > 1);
     check(chunker, &data, &[7, 65536, 131072]);
 }
+
+consistency!(
+    "rabin",
+    rabin,
+    hash_roll::rabin::Rabin::new(
+        hash_roll::rabin::DEFAULT_POLYNOMIAL,
+        8,
+        hash_roll::ChunkSizes::new(16, 64, 256),
+        6
+    )
+);
+consistency!(
+    "ae",
+    ae,
+    hash_roll::ae::Ae::new(16, hash_roll::ae::Extremum::Maximum, 256)
+);
+consistency!(
+    "gear64",
+    gear64,
+    hash_roll::gear64::Gear64::with_average_size_log2(8)
+);
+consistency!(
+    "seqcdc",
+    seqcdc,
+    hash_roll::seqcdc::SeqCdc::new(
+        hash_roll::ChunkSizes::new(16, 64, 256),
+        3,
+        2,
+        7,
+        hash_roll::seqcdc::Direction::Increasing
+    )
+);
+consistency!(
+    "leap",
+    leap,
+    hash_roll::leap::Leap::new(hash_roll::ChunkSizes::new(204, 512, 1024))
+);

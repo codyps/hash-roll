@@ -23,7 +23,17 @@ default = [
 	"pigz",
 	"ram",
 	"zpaq",
-	"zstd"
+	"zstd",
+	"rabin",
+	"rabin-karp",
+	"ae",
+	"gear64",
+	"fastcdc2020",
+	"seqcdc",
+	"ultracdc",
+	"leap",
+	"supercdc",
+	"tttd"
 ]
 
 bup = []
@@ -36,6 +46,17 @@ pigz = []
 ram = []
 zpaq = []
 zstd = []
+rabin = []
+rabin-karp = []
+ae = []
+gear64 = []
+fastcdc2020 = []
+seqcdc = []
+ultracdc = []
+leap = []
+supercdc = ["fastcdc2020"]
+tttd = ["rabin"]
+simd = ["ae"]
 
 [dependencies]
 fmt-extra = "0.2"
@@ -47,6 +68,7 @@ rollsum = "0.3"
 criterion = "0.8.2"
 rand_pcg = "0.10.2"
 proptest = "1.12"
+fastcdc = "=5.0.0" # Independent oracle for the versioned 2020 boundaries.
 
 [[bench]]
 name = "compare"

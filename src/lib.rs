@@ -78,29 +78,52 @@
 //    how to look into the input data directly.
 
 #![warn(rust_2018_idioms, missing_debug_implementations)]
-/* TODO: Rabin-Karp
- * H = c_1 * a ** (k-1) + c_2 * a ** (k-2) ... + c_k * a ** 0
- * where:
- *  a is a constant
- *  c_1, ..., c_k are the input characters
- *
- * All math is done modulo n. Choice of n & a critical
- *
- * Parameters:
- *  - n: mululo limit
- *  - a: a constant
- *
- * State:
- *  H
- *
- * Application:
- */
-
-/* TODO:
- * rollsum of librsync
- */
-
 use std::mem;
+
+// New streaming chunkers share a single implementation of the offset contract.
+#[allow(unused_macros)]
+macro_rules! impl_stream_chunker {
+    ($config:ty, $state:ty) => {
+        impl crate::ToChunkIncr for $config {
+            type Incr = $state;
+            fn to_chunk_incr(&self) -> Self::Incr {
+                self.state()
+            }
+        }
+        impl crate::Chunk for $config {
+            type SearchState = $state;
+            fn to_search_state(&self) -> Self::SearchState {
+                self.state()
+            }
+            fn find_chunk_edge(
+                &self,
+                state: &mut Self::SearchState,
+                data: &[u8],
+            ) -> (Option<usize>, usize) {
+                use crate::ChunkIncr;
+                match state.push(data) {
+                    Some(n) => (Some(n), n),
+                    None => (None, data.len()),
+                }
+            }
+        }
+    };
+}
+
+pub mod chunk_sizes;
+pub mod rolling;
+pub use chunk_sizes::ChunkSizes;
+pub use rolling::RollingHash;
+pub mod ae;
+pub mod fastcdc2020;
+pub mod gear64;
+pub mod leap;
+pub mod rabin;
+pub mod rabin_karp;
+pub mod seqcdc;
+pub mod supercdc;
+pub mod tttd;
+pub mod ultracdc;
 
 pub mod bup;
 pub mod buzhash;
@@ -276,6 +299,22 @@ impl<'a, C: ChunkIncr> Iterator for IterSlices<'a, C> {
 /// contiguous slice, [`ChunkIncr`] may be a better choice (it allows non-contiguous input, but may
 /// be slowing for some chunking algorthms).
 pub trait Chunk {
+    /// Iterate over all chunks of a complete input, including its final tail.
+    /// Empty input produces no chunks. Each iterator has independent source state.
+    fn chunks<'c, 'd>(&'c self, data: &'d [u8]) -> ChunkSlices<'c, 'd, Self>
+    where
+        Self: Sized,
+    {
+        ChunkSlices {
+            chunker: self,
+            state: self.to_search_state(),
+            data,
+            discarded: 0,
+            emitted: 0,
+            done: false,
+        }
+    }
+
     /// `SearchState` allows searching for the chunk edge to resume without duplicating work
     /// already done.
     type SearchState;
@@ -400,3 +439,49 @@ pub trait ToChunkIncr {
     /// needed for incremental computation.
     fn to_chunk_incr(&self) -> Self::Incr;
 }
+
+/// Borrowed chunks from any [`Chunk`] implementation, including the final tail.
+pub struct ChunkSlices<'c, 'd, C: Chunk> {
+    chunker: &'c C,
+    state: C::SearchState,
+    data: &'d [u8],
+    discarded: usize,
+    emitted: usize,
+    done: bool,
+}
+impl<C: Chunk> std::fmt::Debug for ChunkSlices<'_, '_, C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChunkSlices")
+            .field("emitted", &self.emitted)
+            .field("done", &self.done)
+            .finish_non_exhaustive()
+    }
+}
+impl<'d, C: Chunk> Iterator for ChunkSlices<'_, 'd, C> {
+    type Item = &'d [u8];
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.done || self.emitted == self.data.len() {
+            return None;
+        }
+        let remaining = &self.data[self.discarded..];
+        let (cut, discard) = self.chunker.find_chunk_edge(&mut self.state, remaining);
+        assert!(discard <= remaining.len(), "invalid discard offset");
+        let end = match cut {
+            Some(n) => {
+                assert!(n <= remaining.len() && discard <= n, "invalid cut offset");
+                let end = self.discarded + n;
+                assert!(end > self.emitted, "chunker did not advance");
+                end
+            }
+            None => {
+                self.done = true;
+                self.data.len()
+            }
+        };
+        self.discarded += discard;
+        let chunk = &self.data[self.emitted..end];
+        self.emitted = end;
+        Some(chunk)
+    }
+}
+impl<C: Chunk> std::iter::FusedIterator for ChunkSlices<'_, '_, C> {}

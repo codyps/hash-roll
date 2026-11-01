@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add GF(2) Rabin CDC and rolling fingerprints with a restic preset, integer
+  Rabin–Karp rolling checksums, AE Min/Max, Gear64, versioned FastCDC 2020,
+  SeqCDC, and experimental UltraCDC, Leap, SuperCDC, and TTTD chunkers.
+- Add shared `ChunkSizes`, `RollingHash`, and `Chunk::chunks` slice iteration.
+  Preserve the retained-buffer contract for algorithms with look-ahead/fallbacks.
+- Add optional runtime-detected AE AVX2 acceleration with scalar equivalence tests.
+- Check new algorithms against independent arithmetic/cut oracles, reference
+  FastCDC and UltraCDC implementations, bytewise fragmented input, hard limits,
+  reset behavior, and bounded source-local prediction history.
+- Extend corpus benchmarks, individual-feature CI, and upstream notices to the
+  added algorithms; keep all new algorithm runtime code dependency-free.
+
 - Normalize Zpaq configuration to byte units, correct its default maximum to
   508 KiB, and respect inclusive and exclusive length bounds. Maximum-based
   constructors now support small and non-power-of-two sizes without floating
