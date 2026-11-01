@@ -14,8 +14,12 @@ pub struct Mii {
 impl Mii {
     /// Create a new splitter with parameter `w`
     ///
-    /// `w` is the number of "increments" (positive changes in byte value) after which we split the
-    /// input
+    /// `w` is the number of consecutive strict byte increases after which we split the
+    /// input.
+    ///
+    /// # Panics
+    /// Panics unless `w` is in `1..=255`: bytes cannot have 256 consecutive
+    /// strict increases, and zero increments cannot trigger a boundary.
     ///
     // TODO: determine distribution and expected size of chunks
     //
@@ -24,6 +28,7 @@ impl Mii {
     // 3: P(curr > prev) |  t2 = ???
     //    P(curr > prev) | !t2 = ???
     pub fn with_w(w: u64) -> Self {
+        assert!((1..=255).contains(&w), "increment count must be in 1..=255");
         Self { w }
     }
 }

@@ -116,9 +116,6 @@ pub mod range;
 pub mod zpaq;
 pub mod zstd;
 
-#[cfg(feature = "zpaq")]
-pub(crate) use range::RangeExt;
-
 /// Accept incremental input and provide indexes of split points
 ///
 /// Compared to [`Chunk`], [`ChunkIncr`] allows avoiding having to buffer all input data in memory,

@@ -6,155 +6,143 @@
 use std::fmt;
 use std::num::Wrapping;
 
-use crate::{Chunk, ChunkIncr, RangeExt, ToChunkIncr};
-use std::ops::Bound;
-use std::ops::RangeBounds;
+use crate::{Chunk, ChunkIncr, ToChunkIncr};
+use std::ops::{Bound, RangeBounds};
 
-/**
- * A splitter used in go 'dedup' and zpaq that does not require looking back in the source
- * data to update
- *
- * PDF: ??
- *
- * Note: go-dedup & zpaq calculate the relationship between their parameters slightly differently.
- * We support both of these (via the seperate with_*() constructors, but it'd be nice to clarify
- * why they differ and what affect the differences have.
- *
- * References:
- *
- *  - <http://encode.ru/threads/456-zpaq-updates?p=45192&viewfull=1#post45192>
- *  - <https://github.com/klauspost/dedup/blob/master/writer.go#L668>, 'zpaqWriter'
- *  - <https://github.com/zpaq/zpaq/blob/master/zpaq.cpp>
- *
- * Parameters:
- *
- *  - fragment (aka average_size_pow_2): average size = 2**fragment KiB
- *    in Zpaq (the compressor), this defaults to 6
- *  - min_size, max_size: additional bounds on the blocks. Not technically needed for the algorithm
- *    to function
- *
- *  In Zpaq-compressor, min & max size are calculated using the fragment value
- *  In go's dedup, fragment is calculated using a min & max size
- *
- * In-block state:
- *
- *  - hash: u32, current hash
- *  - last_byte: u8, previous byte read
- *  - predicted_byte: array of 256 u8's.
- *
- * Between-block state:
- *
- *  - None
- */
+/// Zpaq content-defined chunking with an order-1 byte predictor.
+///
+/// Sizes and exponents in this API are in bytes. Zpaq's command-line
+/// `-fragment` argument is a KiB exponent, so add 10 when translating it to
+/// [`Self::with_average_size_pow_2`]. The default byte exponent is 16.
+///
+/// References:
+/// - <https://github.com/zpaq/zpaq/blob/master/zpaq.cpp>
+/// - <https://github.com/klauspost/dedup/blob/master/writer.go>
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Zpaq {
-    range: (Bound<u64>, Bound<u64>),
-    max_hash: u32,
+    min_size: u64,
+    max_size: Option<u64>,
+    // A u64 allows a cutoff of 2^32, which matches every possible u32 hash.
+    max_hash: u64,
 }
 
 impl Zpaq {
-    /* this is taken from go-dedup */
-    fn fragment_ave_from_max(max: u64) -> u8 {
-        /* TODO: convert this to pure integer math */
-        (max as f64 / (64f64 * 64f64)).log2() as u8
-    }
-
-    /* these are based on the zpaq (not go-dedup) calculations */
-    fn fragment_ave_from_range<T: RangeBounds<u64>>(range: T) -> u8 {
-        let v = match range.end_bound() {
-            Bound::Included(i) => *i,
-            Bound::Excluded(i) => *i - 1,
-            Bound::Unbounded => {
-                /* try to guess based on first */
-                64 * match range.start_bound() {
-                    Bound::Included(i) => *i,
-                    Bound::Excluded(i) => *i + 1,
-                    Bound::Unbounded => {
-                        /* welp, lets use the default */
-                        return 16;
-                    }
-                }
-            }
+    fn bounds(range: impl RangeBounds<u64>) -> (u64, Option<u64>) {
+        let min = match range.start_bound() {
+            Bound::Included(&n) => n.max(1),
+            Bound::Excluded(&n) => n.checked_add(1).expect("minimum chunk size overflows"),
+            Bound::Unbounded => 1,
         };
-
-        Self::fragment_ave_from_max(v)
+        let max = match range.end_bound() {
+            Bound::Included(&n) => Some(n),
+            Bound::Excluded(&n) => Some(n.checked_sub(1).expect("empty chunk size range")),
+            Bound::Unbounded => None,
+        };
+        assert!(
+            max.is_none_or(|max| min <= max),
+            "range must contain a positive chunk size"
+        );
+        (min, max)
     }
 
-    /* these are based on the zpaq (not go-dedup) calculations */
-    fn range_from_fragment_ave(fragment_ave: u8) -> impl RangeBounds<u64> {
-        assert!(fragment_ave <= 32);
-        assert!(fragment_ave >= 10);
-        64 << (fragment_ave - 10)..8128 << fragment_ave
+    fn cutoff_from_max(max: u64) -> u64 {
+        assert!(
+            (1..=1u64 << 34).contains(&max),
+            "maximum must be in 1..=2^34 bytes"
+        );
+        // Natural cuts have probability 4/max, as in go-dedup. Compute the
+        // threshold directly to preserve non-power-of-two targets as well.
+        ((1u64 << 34) / max).min(1u64 << 32)
     }
 
-    fn range_from_max(max: u64) -> impl RangeBounds<u64> {
-        max / 64..max
-    }
-
-    fn max_hash_from_fragment_ave(fragment_ave: u8) -> u32 {
-        assert!(fragment_ave <= 32);
-        1 << (32 - fragment_ave)
-        /*
-         * go-dedup does this:
-         * (22f64 - fragment_ave).exp2() as u32
-         *
-         * Which should be equivalent to the integer math above (which is used by zpaq).
-         */
-    }
-
-    /**
-     * Create a splitter using the range of output block sizes.
-     *
-     * The average block size will be the max block size (if any) divided by 4, using the same
-     * algorithm to calculate it as go-dedup.
-     */
-    pub fn with_range(range: impl RangeBounds<u64> + Clone) -> Self {
-        let f = Self::fragment_ave_from_range(range.clone());
-        Self::with_average_and_range(f, range)
-    }
-
-    /**
-     * Create a splitter using the defaults from Zpaq (the compressor) given a average size
-     * formated as a power of 2.
-     *
-     * Corresponds to zpaq's argument "-fragment".
-     */
-    pub fn with_average_size_pow_2(average_size_pow_2: u8) -> Self {
-        let r = Self::range_from_fragment_ave(average_size_pow_2);
-        Self::with_average_and_range(average_size_pow_2, r)
-    }
-
-    /**
-     * Use the defaults from go-dedup to generate a splitter given the max size of a split.
-     *
-     * The average block size will be the max block size (if any) divided by 4, using the same
-     * algorithm to calculate it as go-dedup.
-     */
-    pub fn with_max_size(max: u64) -> Self {
-        Self::with_average_and_range(Self::fragment_ave_from_max(max), Self::range_from_max(max))
-    }
-
-    /**
-     * Create a splitter with control of all parameters
-     *
-     * All the other constructors use this internally
-     */
-    pub fn with_average_and_range(average_size_pow_2: u8, range: impl RangeBounds<u64>) -> Self {
-        Zpaq {
-            range: range.into_tuple(),
-            max_hash: Self::max_hash_from_fragment_ave(average_size_pow_2),
+    /// Configure the permitted chunk lengths using standard Rust range bounds.
+    ///
+    /// A finite upper bound sets the natural-cut target to one quarter of the
+    /// largest permitted length. With no upper bound, the target is 16 times
+    /// the minimum length, or 64 KiB when the minimum is one byte.
+    ///
+    /// The final incomplete chunk can be shorter than the minimum.
+    ///
+    /// # Panics
+    /// Panics for a range containing no positive lengths, a finite maximum
+    /// above 2^34 bytes, or an inferred target above 2^32 bytes. Use
+    /// [`Self::with_average_and_range`] to configure the target separately.
+    pub fn with_range(range: impl RangeBounds<u64>) -> Self {
+        let (min_size, max_size) = Self::bounds(range);
+        let max_hash = if let Some(max) = max_size {
+            Self::cutoff_from_max(max)
+        } else {
+            let target = if min_size == 1 {
+                1 << 16
+            } else {
+                min_size.checked_mul(16).expect("inferred target overflows")
+            };
+            assert!(
+                target <= 1u64 << 32,
+                "inferred target must not exceed 2^32 bytes"
+            );
+            (1u64 << 32) / target
+        };
+        Self {
+            min_size,
+            max_size,
+            max_hash,
         }
     }
 
-    /*
-    fn average_block_size(&self) -> u64 {
-        /* I don't know If i really trust this, do some more confirmation */
-        1024 << self.fragment
+    /// Use Zpaq's size limits for an average length of `2^exponent` bytes.
+    ///
+    /// The minimum is `64 * 2^(exponent - 10)` bytes and the inclusive maximum
+    /// is `8128 * 2^(exponent - 10)` bytes, matching Zpaq's fragment limits.
+    ///
+    /// # Panics
+    /// Panics unless the byte exponent is in `10..=32`.
+    pub fn with_average_size_pow_2(exponent: u8) -> Self {
+        assert!(
+            (10..=32).contains(&exponent),
+            "byte exponent must be in 10..=32"
+        );
+        let fragment = exponent - 10;
+        Self::with_average_and_range(exponent, (64u64 << fragment)..=(8128u64 << fragment))
     }
-    */
 
-    fn split_here(&self, hash: u32, index: u64) -> bool {
-        (hash < self.max_hash && !self.range.under_min(&index)) || self.range.exceeds_max(&index)
+    /// Use go-dedup's natural-cut target of `max / 4` bytes (at least one byte).
+    ///
+    /// The inclusive maximum is `max`; the minimum is `max / 64`, rounded
+    /// down but never below one byte. Non-power-of-two maxima are supported.
+    ///
+    /// # Panics
+    /// Panics unless `max` is in `1..=2^34` bytes.
+    pub fn with_max_size(max: u64) -> Self {
+        let max_hash = Self::cutoff_from_max(max);
+        Self {
+            min_size: (max / 64).max(1),
+            max_size: Some(max),
+            max_hash,
+        }
+    }
+
+    /// Set a natural-cut target of `2^exponent` bytes and permitted lengths.
+    ///
+    /// Range bounds have their standard Rust meaning. Natural cuts before
+    /// the minimum are ignored; reaching a finite maximum always emits a cut.
+    /// The final incomplete chunk can be shorter than the minimum.
+    ///
+    /// # Panics
+    /// Panics for an exponent above 32 or a range with no positive lengths.
+    pub fn with_average_and_range(exponent: u8, range: impl RangeBounds<u64>) -> Self {
+        assert!(exponent <= 32, "byte exponent must be in 0..=32");
+        let (min_size, max_size) = Self::bounds(range);
+        Self {
+            min_size,
+            max_size,
+            max_hash: 1u64 << (32 - exponent),
+        }
+    }
+
+    fn split_here(&self, hash: u32, length: u64) -> bool {
+        (u64::from(hash) < self.max_hash && length >= self.min_size)
+            || self.max_size.is_some_and(|max| length >= max)
     }
 }
 
